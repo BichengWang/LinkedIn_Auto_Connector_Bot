@@ -32,16 +32,12 @@ MAX_RETRIES = 5  # Maximum number of retries for refreshing
 
 SEARCH_LINK = ("https://www.linkedin.com/search/results/people/?geoUrn=%5B%2290000084%22%5D&industry=%5B%221594%22%2C%226%22%2C%224%22%5D&keywords=ceo&origin=FACETED_SEARCH&sid=Gg1")
 # Base connection message template
-BASE_CONNECTION_MESSAGE = """Hi there,
+BASE_CONNECTION_MESSAGE = """Hi,
 
-I hope this message finds you well. I'm exploring new opportunities in tech and would love to connect. 
-I have a strong background in ML/AI and was lever AI techs bring x billion gross booking value with x00 millions profit contributed to Uber ebita from negative to positive.
-
-Looking forward to connecting!
+I'm exciting to build connections with top tech leaders like you. I'm a 8 years ML TL and was successfully bring x billion revenue with x00 millions profit to Uber.
 
 Best regards,
-Kenneth
-"""
+Kenneth"""
 
 MAX_CONNECT_REQUESTS = 20  # Limit for connection requests
 
