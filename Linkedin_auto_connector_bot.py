@@ -25,7 +25,7 @@ import time
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # LinkedIn credentials will be entered manually by the user at runtime
-LINKEDIN_USERNAME = 'xxx@gmail.com'  # your email -> no need
+LINKEDIN_USERNAME = 'bichengwang17@gmail.com'  # your email -> no need
 LINKEDIN_PASSWORD = 'xxx'  # your password -> no need
 
 MAX_RETRIES = 5  # Maximum number of retries for refreshing
@@ -43,12 +43,28 @@ MAX_CONNECT_REQUESTS = 20  # Limit for connection requests
 
 def login_to_linkedin(driver):
     """
-    Open the LinkedIn login page and prompt the user to manually enter their credentials.
+    Open the LinkedIn login page and automatically type the username.
     Waits for the user to complete login before proceeding.
     """
     try:
         driver.get("https://www.linkedin.com/login")
-        logging.info("Please log in to LinkedIn manually in the opened browser window.")
+        logging.info("Attempting to auto-type the LinkedIn username.")
+
+        # Wait for the username input to be present
+        username_input = WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.ID, "username"))
+        )
+        username_input.clear()
+        username_input.send_keys(LINKEDIN_USERNAME)
+        logging.info("Username auto-typed. Please enter your password and complete login manually.")
+
+        # Optionally, focus the password field for user convenience
+        try:
+            password_input = driver.find_element(By.ID, "password")
+            password_input.click()
+        except Exception:
+            pass
+
         # Wait for the user to log in by checking for the feed page
         WebDriverWait(driver, 300).until(EC.url_contains("/feed"))
         logging.info("Successfully logged into LinkedIn.")
@@ -88,11 +104,26 @@ def handle_connect_button_with_retry(driver, button):
             button.click()
             time.sleep(2)
 
-            add_note_button = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Add a note']"))
-            )
-            add_note_button.click()
-            time.sleep(2)
+            # Try to click "Send without a note" button first
+            try:
+                send_wo_note_button = WebDriverWait(driver, 3).until(
+                    EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Send without a note']"))
+                )
+                send_wo_note_button.click()
+                logging.info("Sent connection request without a note.")
+                time.sleep(2)
+                return  # Exit if successful
+            except Exception:
+                # If "Send without a note" is not found, try "Add a note"
+                try:
+                    add_note_button = WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Add a note']"))
+                    )
+                    add_note_button.click()
+                    time.sleep(2)
+                except Exception as e:
+                    logging.error(f"Neither 'Send without a note' nor 'Add a note' button found: {e}")
+                    break
 
             message_box = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.XPATH, "//textarea[@name='message']"))
