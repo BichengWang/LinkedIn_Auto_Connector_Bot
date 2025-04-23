@@ -25,8 +25,8 @@ import time
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # LinkedIn credentials will be entered manually by the user at runtime
-LINKEDIN_USERNAME = 'kennethwang0413@gmail.com'  # your email -> no need
-LINKEDIN_PASSWORD = 'Wbc940918+'  # your password -> no need
+LINKEDIN_USERNAME = 'xxx@gmail.com'  # your email -> no need
+LINKEDIN_PASSWORD = 'xxx'  # your password -> no need
 
 MAX_RETRIES = 5  # Maximum number of retries for refreshing
 
