@@ -24,41 +24,37 @@ import time
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Replace with your LinkedIn credentials
-LINKEDIN_USERNAME = '#@yahoo.com' # your email
-LINKEDIN_PASSWORD = '' # your password
+# LinkedIn credentials will be entered manually by the user at runtime
+LINKEDIN_USERNAME = 'kennethwang0413@gmail.com'  # your email -> no need
+LINKEDIN_PASSWORD = 'Wbc940918+'  # your password -> no need
 
 MAX_RETRIES = 5  # Maximum number of retries for refreshing
 
-SEARCH_LINK = ("https://www.linkedin.com/search/results/people/?geoUrn=%5B%22103644278%22%5D&keywords=technical%20recruiter&origin=GLOBAL_SEARCH_HEADER&page=14")
+SEARCH_LINK = ("https://www.linkedin.com/search/results/people/?geoUrn=%5B%2290000084%22%5D&industry=%5B%221594%22%2C%226%22%2C%224%22%5D&keywords=ceo&origin=FACETED_SEARCH&sid=Gg1")
 # Base connection message template
 BASE_CONNECTION_MESSAGE = """Hi there,
 
-I hope this message finds you well. I'm exploring new opportunities in tech and would love to connect. I have a strong background in Azure Cloud and Software Development, with a focus on Cloud Engineering and AI/ML.
+I hope this message finds you well. I'm exploring new opportunities in tech and would love to connect. 
+I have a strong background in ML/AI and was lever AI techs bring x billion gross booking value with x00 millions profit contributed to Uber ebita from negative to positive.
 
 Looking forward to connecting!
 
 Best regards,
-Pavlo Bondarenko
+Kenneth
 """
 
 MAX_CONNECT_REQUESTS = 20  # Limit for connection requests
 
-def login_to_linkedin(driver, username, password):
+def login_to_linkedin(driver):
+    """
+    Open the LinkedIn login page and prompt the user to manually enter their credentials.
+    Waits for the user to complete login before proceeding.
+    """
     try:
         driver.get("https://www.linkedin.com/login")
-        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.ID, "username")))
-
-        # Enter username
-        username_field = driver.find_element(By.ID, "username")
-        username_field.send_keys(username)
-
-        # Enter password
-        password_field = driver.find_element(By.ID, "password")
-        password_field.send_keys(password)
-        password_field.send_keys(Keys.RETURN)
-        time.sleep(5)  # Wait for the page to load or enter captcha
-        WebDriverWait(driver, 20).until(EC.url_contains("/feed"))
+        logging.info("Please log in to LinkedIn manually in the opened browser window.")
+        # Wait for the user to log in by checking for the feed page
+        WebDriverWait(driver, 300).until(EC.url_contains("/feed"))
         logging.info("Successfully logged into LinkedIn.")
         time.sleep(5)  # Wait for the feed to load
     except Exception as e:
@@ -144,7 +140,6 @@ def process_buttons(driver):
 
         working = True
 
-
         while working:
             # Find all buttons on the page
             buttons = driver.find_elements(By.TAG_NAME, "button")
@@ -203,15 +198,17 @@ def refresh_page(driver, retries):
 
 if __name__ == "__main__":
     options = Options()
-    options.binary_location = 'C:/Program Files/Mozilla Firefox/firefox.exe' ## path to your firefox browser(must install firefox browser)
+    options.binary_location = '/Applications/Firefox.app/Contents/MacOS/firefox'  # path to your Firefox browser on Mac
 
-    # Set up the webdriver (Replace the path with the path to your webdriver) // mine is geckodriver32.exe already installed in the directory
-    # go to https://github.com/mozilla/geckodriver/releases to download latest version of geckodriver
-    service = Service('geckodriver32.exe')
+    # Set up the webdriver (Replace the path with the path to your Mac geckodriver)
+    # Download the latest version of geckodriver for Mac from:
+    # https://github.com/mozilla/geckodriver/releases
+    service = Service('./geckodriver')  # Assuming geckodriver is in the current directory and is the Mac version
     driver = webdriver.Firefox(service=service, options=options)
 
     try:
-        login_to_linkedin(driver, LINKEDIN_USERNAME, LINKEDIN_PASSWORD)
+        # Prompt the user to log in manually
+        login_to_linkedin(driver)
         process_buttons(driver)
     finally:
         driver.quit()

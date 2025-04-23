@@ -1,1 +1,3 @@
-.env
+.envvenv/
+venv/
+geckodriver
