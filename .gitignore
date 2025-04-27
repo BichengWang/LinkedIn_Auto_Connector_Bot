@@ -1,3 +1,4 @@
 .envvenv/
 venv/
 geckodriver
+__pycache__/
