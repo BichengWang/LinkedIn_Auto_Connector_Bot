@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "linkedin-mcp": {
+      "source": "stickerdaniel/linkedin-mcp-server",
+      "sourceType": "github",
+      "skillPath": "plugins/linkedin-mcp-server/skills/linkedin-mcp/SKILL.md",
+      "computedHash": "7a9b3668222dd5b426638a3851826e2173f29a70d889b74f5719deacbd89f676"
+    }
+  }
+}
