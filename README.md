@@ -96,6 +96,23 @@ The bot will log into your LinkedIn account and begin sending connection request
 ### 📜 Logging
 Logs of sent connection requests and responses are saved in the logs directory. You can review these logs to analyze the performance of your outreach strategy.
 
+## 🧠 AI Agent Mode (LinkedIn MCP)
+
+Instead of running the Selenium bot, you can drive LinkedIn from an AI agent (Claude Code, Codex, Cursor, …). The repo ships a project-scoped setup:
+
+- `.mcp.json` registers [stickerdaniel/linkedin-mcp-server](https://github.com/stickerdaniel/linkedin-mcp-server) as the `linkedin` MCP server (`uvx mcp-server-linkedin@latest`).
+- `.agents/skills/linkedin-mcp/` and `.claude/skills/linkedin-mcp/` contain its `linkedin-mcp` skill. `skills-lock.json` pins the source; `npx skills experimental_install` restores it.
+
+Setup:
+
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/).
+2. Sign in once: `uvx mcp-server-linkedin@latest --login`. The session is stored in `~/.linkedin-mcp/`, outside the repo.
+3. Open the repo in your agent and approve the project MCP server.
+
+Then ask the agent something like "find Anthropic's leadership and send them connection requests with a short note". The skill requires the agent to confirm the exact recipients and note before it calls `connect_with_person`.
+
+The same rules apply as for the bot: stay under 80 requests per week, and keep in mind that LinkedIn's User Agreement prohibits automated access.
+
 ### 🤝 Contributing
 
 Contributions are welcome! Please follow these steps to contribute:
