@@ -4,147 +4,142 @@
     </a>
 </div>
 
-# 🤖 LinkedIn Auto Connector Bot
+# 🤖 LinkedIn Interaction
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## 🌟 Overview
+Selenium automation for your own LinkedIn account, split into six modules behind one CLI and Python package.
 
-The LinkedIn Auto Connector Bot is a powerful tool designed to automate connection requests on LinkedIn. This bot helps users expand their professional network by sending connection requests to a targeted audience based on specified search criteria. It can be customized to send personalized connection messages.
+| Module | What it does | CLI |
+|---|---|---|
+| `communication` | send messages, list the inbox, read and reply to threads | `message send / inbox / read / reply` |
+| `connection` | connect from a profile, invite a whole people-search (the original bot), accept invitations | `connect profile / search / accept` |
+| `social` | follow people and companies, react to posts, comment | `social follow / react / comment` |
+| `posts` | publish text posts, read the feed | `post create / feed` |
+| `job_matching` | search jobs, keyword-filter them, rerank the best with Claude against your resume | `jobs match` |
+| `job_applying` | Easy Apply from your answers map, stopping at review for your y/N | `jobs apply` |
 
-:star::star::star::star::star: ---> Star the Repo!
+## 🚨 Read this first
 
+Automating LinkedIn breaks its User Agreement, and LinkedIn restricts accounts it catches. Use at your own risk.
 
+- **Stay under ~80 connection requests a week.** Every write action has a per-run cap in `[limits]`.
+- The bot waits a random interval between actions (set in `[pacing]`).
+- Every write runs only when you give the command explicitly. `jobs apply` also asks before each submission.
 
-### ⚠️ Important Notes
+## 🛠 Install
 
-This script is a LinkedIn bot that automatically sends connection requests with a custom note to profiles on LinkedIn. It uses the Selenium WebDriver to navigate LinkedIn and interact with the UI elements.
-
-# 🚨🚨🚨 Please use it on your own risk! This is against LinkedIn policy. You may get banned if they catch you! 🚨🚨🚨
-
-## 🚨🚨🚨 **Do not exceed 80 requests per week!**  🚨🚨🚨
-
-### LinkedIn may block your account if you exceed this limit.
-
-P.S. For LinkedIn team - ooops, sorry! I was boring! 
-
-### 🚀 Quick Start Guide
-
-1. **💼 Add My LinkedIn:**  
-   You can connect with me on LinkedIn: [My LinkedIn Profile](https://www.linkedin.com/in/mrbondarenko/)
-
-2. **🔍 Set Up Your Search Link:**  
-   To set up your search link, follow these steps:
-   - Go to [LinkedIn's main page](https://www.linkedin.com/).
-   - In the search bar at the top, type in the keywords relevant to the people you want to connect with (e.g., "Tech Recruiter", "Cloud Engineer").
-   - Press Enter to see the search results.
-   - On the search results page, click on the "People" filter to narrow the results to LinkedIn profiles only.
-   - Copy the URL from your browser's address bar. This URL is your `SEARCH_LINK`.
-   - Open the bot script and find the `SEARCH_LINK` variable. Replace the existing link with the one you copied from LinkedIn.
-
-3. **🎉 Have Fun!**  
-   Start the bot and watch as it expands your network with targeted connection requests.
-
-## 🔧 Features
-
-- **🤖 Automated Connection Requests:** Send connection requests to targeted LinkedIn users.
-- **✉️ Personalized Messages:** Customize the connection request message for a more personalized outreach.
-- **🔎 Search Criteria:** Target connections based on industry, location, job title, and more.
-- **📊 Logging:** Keep track of connection requests and responses for analysis and optimization.
-
-## 🛠 Installation
-
-### 📋 Prerequisites
-
-- [Python 3.8+](https://www.python.org/downloads/)
-- [🌐 Mozilla Firefox](https://www.mozilla.org/en-US/firefox/new/) browser
-- [🦊 Geckodriver download page](https://github.com/mozilla/geckodriver/releases) (Ensure that the Geckodriver version matches your installed version of Firefox)
-
-### 📂 Clone the Repository
+You need Python 3.11+ and Chrome; Firefox works too, see `[browser]`. Selenium Manager downloads the matching driver automatically.
 
 ```bash
 git clone https://github.com/OfficialCodeVoyage/LinkedIn_Auto_Connector_Bot.git
 cd LinkedIn_Auto_Connector_Bot
+python3 -m venv venv && source venv/bin/activate
+pip install -e .
+cp config.example.toml config.toml   # then edit; config.toml is git-ignored
 ```
 
-### 📦 Install Dependencies
+Log in once. The browser profile in `~/.linkedin-interaction/` keeps the session, so later runs skip the login. If `LINKEDIN_USERNAME` and `LINKEDIN_PASSWORD` are set in the environment, they're typed in for you. 2FA and captchas are always yours to complete in the window.
+
 ```bash
-pip install -r requirements.txt
+linkedin-interaction login
 ```
 
-## 🛠️ Configuration
-
-1. 🔐 Set up LinkedIn credentials:
-   Change the ```LINKEDIN_USERNAME``` and ```LINKEDIN_PASSWORD``` in the ```Linkedin_auto_connector_bot.py```.
-
-2. 🔍 Customize Your Search Link:
-   Follow the instructions provided in the Quick Start Guide to generate your LinkedIn search link. Replace the SEARCH_LINK variable in the 
-   ```Linkedin_auto_connector_bot.py``` with your copied search link.
-
-3. 📝 Configure Message Template:
-   Adjust the for ```BASE_CONNECTION_MESSAGE ``` your needs in the ```Linkedin_auto_connector_bot.py```.
-
-   
 ## 🚀 Usage
-### 🏃 Running the Bot
 
 ```bash
-python linkedin_bot.py
+# Connections
+linkedin-interaction connect search                       # invite everyone in connection.search_url
+linkedin-interaction connect search --url "<people search URL>" --max 10 --follow
+linkedin-interaction connect profile https://www.linkedin.com/in/someone/ --note "Hi …"
+linkedin-interaction connect accept --max 20
+
+# Communication
+linkedin-interaction message inbox --unread
+linkedin-interaction message read "Jane Doe"             # participant name as shown in the inbox, or a thread URL
+linkedin-interaction message send https://www.linkedin.com/in/someone/ "Thanks for connecting!"
+linkedin-interaction message reply "Jane Doe" - < reply.txt
+
+# Social interaction
+linkedin-interaction social follow https://www.linkedin.com/company/anthropic/
+linkedin-interaction social react https://www.linkedin.com/feed/update/urn:li:activity:<id>/ --type celebrate
+linkedin-interaction social comment https://www.linkedin.com/feed/update/urn:li:activity:<id>/ "Great write-up"
+
+# Posts
+linkedin-interaction post feed --limit 5
+linkedin-interaction post create - < post.md
+
+# Jobs
+linkedin-interaction jobs match                 # writes matches.json and prints a ranked list
+linkedin-interaction jobs apply --min-score 75  # Easy Apply to the saved matches, one review prompt each
+linkedin-interaction jobs apply https://www.linkedin.com/jobs/view/<id>/
 ```
-The bot will log into your LinkedIn account and begin sending connection requests based on the search criteria provided in your SEARCH_LINK.
 
-### 📜 Logging
-Logs of sent connection requests and responses are saved in the logs directory. You can review these logs to analyze the performance of your outreach strategy.
+Global flags: `--config PATH`, `--headless`, `-v`. Text arguments accept `-` to read from stdin. `--max` can only lower a cap from `[limits]`, never raise it.
 
-## 🧠 AI Agent Mode (LinkedIn MCP)
+### Searching for people to connect with
 
-Instead of running the Selenium bot, you can drive LinkedIn from an AI agent (Claude Code, Codex, Cursor, …). The repo ships a project-scoped setup:
+1. Search LinkedIn for the people you want (e.g. "Tech Recruiter"), choose the **People** filter, and add location or industry filters.
+2. Copy the URL into `connection.search_url`, or pass it with `--url`.
+3. Set `connection.note` to at most 300 characters, or leave it empty to send invitations without a note. If LinkedIn blocks the note (free accounts get only a few personalized invitations a month), that person is skipped. The invitation is never sent silently without the note.
 
-- `.mcp.json` registers [stickerdaniel/linkedin-mcp-server](https://github.com/stickerdaniel/linkedin-mcp-server) as the `linkedin` MCP server (`uvx mcp-server-linkedin@latest`).
-- `.agents/skills/linkedin-mcp/` and `.claude/skills/linkedin-mcp/` contain its `linkedin-mcp` skill. `skills-lock.json` pins the source; `npx skills experimental_install` restores it.
+### Job matching and applying
 
-Setup:
+```mermaid
+flowchart LR
+  S[Search jobs] --> D[Fetch descriptions] --> K[Keyword score<br/>skills, titles, exclusions]
+  K -->|top rerank_top| C[Claude rerank<br/>against your resume] --> M[matches.json]
+  M --> A[Easy Apply<br/>fill from answers] --> R{You review} -->|y| Submit
+  R -->|n| Discard
+```
 
-1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/).
-2. Sign in once: `uvx mcp-server-linkedin@latest --login`. The session is stored in `~/.linkedin-mcp/`, outside the repo.
-3. Open the repo in your agent and approve the project MCP server.
+- **Keyword score (0–1):** 70% weighted coverage of `matching.skills` plus 30% whether a `matching.titles` phrase appears in the job title. Any `matching.exclude` term drops the job.
+- **Claude rerank (0–100):** runs `claude -p` once per job on the top `rerank_top` jobs. It uses your Claude Code login, so you need no API key. The call is lean: no tools, MCP servers or skills, about $0.01 per job. Your resume (`.pdf`, `.md` or `.txt`) is read locally and goes only into that prompt. Use `--no-rerank` for keyword scoring only.
+- **Easy Apply:**
+  - The browser must be visible, because you review every application before it's submitted.
+  - Fields that are already filled stay as they are. Empty fields are filled from `[applying.answers]`, where the longest key contained in the question wins.
+  - When a required question has no answer, the run pauses so you can fill it in the browser.
+  - At the review step it prints every question and answer and asks `Submit application? [y/N]`. Anything other than `y` discards the draft.
 
-Then ask the agent something like "find Anthropic's leadership and send them connection requests with a short note". The skill requires the agent to confirm the exact recipients and note before it calls `connect_with_person`.
+## 🧩 Python library
 
-The same rules apply as for the bot: stay under 80 requests per week, and keep in mind that LinkedIn's User Agreement prohibits automated access.
+```python
+from linkedin_interaction.config import load_settings
+from linkedin_interaction.session import Session
+from linkedin_interaction import communication, job_matching
 
-### 🤝 Contributing
+settings = load_settings()
+with Session(settings) as session:
+    session.login()
+    for convo in communication.list_conversations(session, unread_only=True):
+        print(convo.participants, convo.snippet)
+    matches = job_matching.match_jobs(session, settings)
+```
 
-Contributions are welcome! Please follow these steps to contribute:
+The layout:
+- `session.py` owns the browser, login, waits, random pauses and per-run caps (`Session.spend` runs right before each irreversible click).
+- Each feature module keeps its own LinkedIn selectors at the top of its file, so a LinkedIn UI change touches only one module.
 
-🍴 Fork the repository.
+## 🧠 AI agent mode (LinkedIn MCP)
 
-🌿 Create a new branch (git checkout -b feature-branch).
+You can also drive LinkedIn from an AI agent (Claude Code, Codex, Cursor, …) instead of the CLI:
+- `.mcp.json` registers [stickerdaniel/linkedin-mcp-server](https://github.com/stickerdaniel/linkedin-mcp-server) as the `linkedin` MCP server.
+- `.agents/skills/linkedin-mcp/` and `.claude/skills/linkedin-mcp/` contain its skill. `skills-lock.json` pins the source, and `npx skills experimental_install` restores it.
 
-💻 Make your changes.
+To set it up:
+1. Install [uv](https://docs.astral.sh/uv/).
+2. Run `uvx mcp-server-linkedin@latest --login` once; the session is stored in `~/.linkedin-mcp/`.
+3. Approve the project MCP server in your agent.
 
-📝 Commit your changes (git commit -am 'Add new feature').
+The MCP server covers profile, company, job, feed and inbox reads, plus `send_message` and `connect_with_person`. Posting, reactions, comments, follows and Easy Apply need the CLI.
 
-🚀 Push to the branch (git push origin feature-branch).
+## 🧪 Development
 
-📬 Open a pull request.
+```bash
+pip install -e '.[dev]'
+pytest
+```
 
+## 📄 License
 
-### 📄 License
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
-
-### ⚠️ Disclaimer
-This bot is intended for educational and research purposes only. The use of automated bots on LinkedIn may violate LinkedIn's terms of service. Use at your own risk.
-
-### 🛠️ Support
-For any questions or issues, please feel free to reach out via GitHub Issues or Discussions.
-
-### 🙌 Acknowledgements
-🤖 Selenium for web automation
-
-🐍 Python for providing the programming language
-
-🌍 The LinkedIn community for providing a platform to connect professionals worldwide
-
-
-Made with ❤️ by [Pavlo Bondarenko](https://www.linkedin.com/in/mrbondarenko/)
+MIT. See [LICENSE](LICENSE). Originally created by [Pavlo Bondarenko](https://www.linkedin.com/in/mrbondarenko/).

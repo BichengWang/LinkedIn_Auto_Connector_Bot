@@ -1,4 +1,7 @@
-.envvenv/
+.env
 venv/
-geckodriver
 __pycache__/
+*.egg-info/
+.pytest_cache/
+config.toml
+matches.json
