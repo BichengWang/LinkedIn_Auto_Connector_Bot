@@ -113,6 +113,24 @@ Then ask the agent something like "find Anthropic's leadership and send them con
 
 The same rules apply as for the bot: stay under 80 requests per week, and keep in mind that LinkedIn's User Agreement prohibits automated access.
 
+### 📅 Daily Outreach Automation (Orca)
+
+An [Orca](https://github.com/stablyai/orca) automation runs one agent round every day:
+
+1. **Warm-ups.** It reads your Connections page (Recently added) and Who's Viewed Your Profile in your own Chrome, through the omp browser relay. Then it sends a short, personalized self-intro to each new connection and to each 1st-degree viewer from the last 7 days. 2nd- and 3rd-degree viewers get an invite with a note instead. Anyone you already have a conversation with is skipped: the round opens their composer first and skips anyone with existing messages.
+2. **Cold invites.** It pages through the people searches in `.workflow/linkedin-outreach.json` and sends invites, up to `invites_per_day`.
+
+- `.workflow/linkedin-daily-outreach.md`: the runbook the agent follows, including the message voice.
+- `.workflow/linkedin-outreach.json`: caps, pacing and search audiences.
+- `.scripts/linkedin_outreach.py`: the ledger, kept in `~/.linkedin-outreach/`. It enforces daily caps, pacing between writes and one write per person. Its `precheck` skips the run when the round already finished today or Chrome is closed.
+- `.scripts/linkedin_pages.js`: the driver. It reads pages through the Chrome relay and writes through the LinkedIn MCP tools.
+
+Requirements: Chrome running and signed in to LinkedIn, the omp Chrome relay, and a signed-in LinkedIn MCP session.
+
+Three failed invites in a row pause invites until the next day. That is how LinkedIn's weekly invitation limit shows up. The limit is unpublished, typically around 100 per week.
+
+Inspect or run it with `orca automations list` and `orca automations run <id>`.
+
 ### 🤝 Contributing
 
 Contributions are welcome! Please follow these steps to contribute:
