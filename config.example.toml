@@ -1,0 +1,64 @@
+# Copy to config.toml (git-ignored) and edit. Every section and key is optional.
+# Credentials come from the environment, never from this file:
+#   LINKEDIN_USERNAME / LINKEDIN_PASSWORD  (optional: without them you log in by hand once;
+#   the browser profile keeps the session for later runs)
+
+[browser]
+name = "chrome"            # "chrome" or "firefox"
+# profile_dir = "~/.linkedin-interaction/chrome-profile"   # persistent login (default shown)
+# binary = "/Applications/Firefox.app/Contents/MacOS/firefox"   # only if not auto-detected
+headless = false           # `jobs apply` always needs a visible window
+
+[pacing]                   # random wait between actions, in seconds
+min_delay = 2.0
+max_delay = 6.0
+
+[limits]                   # per-run caps; LinkedIn restricts accounts that send ~100+ invitations a week
+connections = 20
+messages = 10
+follows = 20
+reactions = 30
+comments = 10
+posts = 2
+applications = 10
+
+[connection]
+# Build it on linkedin.com: search, pick the "People" filter, copy the URL.
+search_url = "https://www.linkedin.com/search/results/people/?keywords=engineering%20manager"
+note = """Hi, I'm expanding my network with engineering leaders and would be glad to connect."""  # max 300 chars; empty = no note
+
+[jobs]
+keywords = "machine learning engineer"
+location = "United States"   # older jobs UI only
+geo_id = "103644278"         # what actually filters: copy geoId= from a LinkedIn jobs search URL (103644278 = United States)
+easy_apply_only = true
+remote_only = false
+posted_within = "week"     # any | day | week | month
+max_results = 50
+
+[matching]
+resume = "~/Documents/resume.pdf"   # .pdf, .md or .txt; read by the Claude rerank
+titles = ["machine learning engineer", "ml engineer", "applied scientist"]  # matched against the job title
+exclude = ["security clearance", "phd required"]                           # any hit drops the job
+min_keyword_score = 0.3    # 0..1 gate before the Claude rerank
+rerank_top = 15            # how many keyword-ranked jobs Claude scores
+claude_command = "claude"
+claude_model = "sonnet"    # empty = Claude Code's default
+output = "matches.json"
+
+[matching.skills]          # skill = weight; a plain list under [matching] also works (equal weights)
+python = 3
+pytorch = 2
+"c++" = 1
+kubernetes = 1
+
+[applying]
+min_score = 70             # `jobs apply --from` only applies to matches at or above this score
+follow_company = false     # untick "Follow <company>" on the review step
+
+[applying.answers]         # question substring (case-insensitive) -> answer; the longest matching key wins
+"phone" = "+1 555 0100"
+"years of experience" = "8"
+"authorized to work" = "Yes"
+"sponsorship" = "No"
+"willing to relocate" = "Yes"
