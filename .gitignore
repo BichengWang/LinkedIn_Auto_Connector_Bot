@@ -1,4 +1,2 @@
-.envvenv/
-venv/
-geckodriver
+.env
 __pycache__/

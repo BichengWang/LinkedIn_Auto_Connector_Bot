@@ -1,168 +1,54 @@
-<div style="text-align: center;">
-    <a href="https://www.youtube.com/channel/UCk2O3jSU3_B2MMGr8wLcAdw" target="_blank" title="CodeVoyage YouTube Channel">
-        <img src="banner.jpg" alt="Alt text">
-    </a>
-</div>
-
-# 🤖 LinkedIn Auto Connector Bot
+# LinkedIn Auto Connector (agent-driven)
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## 🌟 Overview
+An AI agent grows your LinkedIn network on a daily schedule. It warms up new connections and profile viewers with a short, personal self-intro, and it sends targeted connection invites. There are no hand-written browser bots. The agent reads LinkedIn in your own Chrome, writes through the [LinkedIn MCP server](https://github.com/stickerdaniel/linkedin-mcp-server), and follows a runbook that a small ledger keeps honest.
 
-The LinkedIn Auto Connector Bot is a powerful tool designed to automate connection requests on LinkedIn. This bot helps users expand their professional network by sending connection requests to a targeted audience based on specified search criteria. It can be customized to send personalized connection messages.
+> ⚠️ LinkedIn's User Agreement prohibits automated access, and LinkedIn enforces an unpublished weekly invitation limit, typically around 100 per week. Going over it usually blocks invitations for a week. Use at your own risk.
 
-:star::star::star::star::star: ---> Star the Repo!
+## How it works
 
+An [Orca](https://github.com/stablyai/orca) automation starts one agent round every day at 09:00 America/Los_Angeles:
 
+1. **Warm-ups.** The agent reads your Connections page (Recently added) and Who's Viewed Your Profile.
+   - **New connections** and **1st-degree viewers from the last 7 days** each get one short, personalized self-intro.
+   - **2nd- and 3rd-degree viewers** get an invite with a note instead.
+   - **Anyone you already have a conversation with is skipped.** Before writing, the round opens that person's composer and retires anyone with existing messages.
+2. **Cold invites.** The agent pages through the people searches in `.workflow/linkedin-outreach.json` and sends invites, up to the daily cap.
 
-### ⚠️ Important Notes
+The agent drafts each message from the person's headline, in the voice set in the runbook. Everything else is deterministic. The ledger refuses any write that would break a cap, repeat a person or a text, or skip the conversation check. Three failed invites in a row pause invites until the next day, which is how LinkedIn's weekly limit shows up.
 
-This script is a LinkedIn bot that automatically sends connection requests with a custom note to profiles on LinkedIn. It uses the Selenium WebDriver to navigate LinkedIn and interact with the UI elements.
+| Path | Role |
+| --- | --- |
+| `.workflow/linkedin-daily-outreach.md` | Runbook the agent follows: steps, standing authorization, voice, rules |
+| `.workflow/linkedin-outreach.json` | Caps, pacing, message lengths, search audiences |
+| `.scripts/linkedin_outreach.py` | Ledger CLI (stdlib only, data in `~/.linkedin-outreach/`). Handles caps, dedupe, conversation-check gate, search cursor and the Orca `precheck` |
+| `.scripts/linkedin_pages.js` | Driver loaded in an omp eval cell. Reads pages through the Chrome relay and writes through the LinkedIn MCP tools |
+| `AGENTS.md` / `CLAUDE.md` | Project rules every agent in this repo follows |
+| `.mcp.json`, `.agents/skills/`, `.claude/skills/`, `skills-lock.json` | Project-scoped LinkedIn MCP server and its `linkedin-mcp` skill |
 
-# 🚨🚨🚨 Please use it on your own risk! This is against LinkedIn policy. You may get banned if they catch you! 🚨🚨🚨
+## Setup
 
-## 🚨🚨🚨 **Do not exceed 80 requests per week!**  🚨🚨🚨
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then sign in to the MCP server once with `uvx mcp-server-linkedin@latest --login`. The session lives in `~/.linkedin-mcp/`.
+2. Install omp and turn on its Chrome browser relay. Keep Chrome running and signed in to LinkedIn.
+3. Install [Orca](https://github.com/stablyai/orca), add this repo, and create the automation:
 
-### LinkedIn may block your account if you exceed this limit.
+   ```bash
+   orca automations create --name "LinkedIn daily outreach" --trigger daily --time 09:00 \
+     --timezone America/Los_Angeles --provider omp --workspace "path:$PWD" --workspace-mode existing \
+     --missed-run-grace-minutes 240 \
+     --precheck "python3 $PWD/.scripts/linkedin_outreach.py precheck" \
+     --prompt "Run today's LinkedIn outreach round. Read and follow .workflow/linkedin-daily-outreach.md in this workspace exactly; it carries my standing authorization for the invites and warm-up messages it describes. Work alone: no Orca workers or subagents. Finish once python3 .scripts/linkedin_outreach.py finish has run, or stop at a precise blocker."
+   ```
 
-P.S. For LinkedIn team - ooops, sorry! I was boring! 
+4. Edit the voice section of the runbook, plus the audiences and caps in the config, to fit you.
 
-### 🚀 Quick Start Guide
+Run a round on demand with `orca automations run <id>`. Inspect the ledger with `python3 .scripts/linkedin_outreach.py status`.
 
-1. **💼 Add My LinkedIn:**  
-   You can connect with me on LinkedIn: [My LinkedIn Profile](https://www.linkedin.com/in/mrbondarenko/)
+## Ad-hoc agent use
 
-2. **🔍 Set Up Your Search Link:**  
-   To set up your search link, follow these steps:
-   - Go to [LinkedIn's main page](https://www.linkedin.com/).
-   - In the search bar at the top, type in the keywords relevant to the people you want to connect with (e.g., "Tech Recruiter", "Cloud Engineer").
-   - Press Enter to see the search results.
-   - On the search results page, click on the "People" filter to narrow the results to LinkedIn profiles only.
-   - Copy the URL from your browser's address bar. This URL is your `SEARCH_LINK`.
-   - Open the bot script and find the `SEARCH_LINK` variable. Replace the existing link with the one you copied from LinkedIn.
+Open the repo in any MCP-capable agent (omp, Claude Code, Codex, Cursor) and approve the project `linkedin` MCP server. Then ask something like "find Anthropic's leadership and send them connection requests with a short note". Outside the daily round, the `linkedin-mcp` skill makes the agent confirm the exact recipients and text before any write.
 
-3. **🎉 Have Fun!**  
-   Start the bot and watch as it expands your network with targeted connection requests.
+## License
 
-## 🔧 Features
-
-- **🤖 Automated Connection Requests:** Send connection requests to targeted LinkedIn users.
-- **✉️ Personalized Messages:** Customize the connection request message for a more personalized outreach.
-- **🔎 Search Criteria:** Target connections based on industry, location, job title, and more.
-- **📊 Logging:** Keep track of connection requests and responses for analysis and optimization.
-
-## 🛠 Installation
-
-### 📋 Prerequisites
-
-- [Python 3.8+](https://www.python.org/downloads/)
-- [🌐 Mozilla Firefox](https://www.mozilla.org/en-US/firefox/new/) browser
-- [🦊 Geckodriver download page](https://github.com/mozilla/geckodriver/releases) (Ensure that the Geckodriver version matches your installed version of Firefox)
-
-### 📂 Clone the Repository
-
-```bash
-git clone https://github.com/OfficialCodeVoyage/LinkedIn_Auto_Connector_Bot.git
-cd LinkedIn_Auto_Connector_Bot
-```
-
-### 📦 Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-## 🛠️ Configuration
-
-1. 🔐 Set up LinkedIn credentials:
-   Change the ```LINKEDIN_USERNAME``` and ```LINKEDIN_PASSWORD``` in the ```Linkedin_auto_connector_bot.py```.
-
-2. 🔍 Customize Your Search Link:
-   Follow the instructions provided in the Quick Start Guide to generate your LinkedIn search link. Replace the SEARCH_LINK variable in the 
-   ```Linkedin_auto_connector_bot.py``` with your copied search link.
-
-3. 📝 Configure Message Template:
-   Adjust the for ```BASE_CONNECTION_MESSAGE ``` your needs in the ```Linkedin_auto_connector_bot.py```.
-
-   
-## 🚀 Usage
-### 🏃 Running the Bot
-
-```bash
-python linkedin_bot.py
-```
-The bot will log into your LinkedIn account and begin sending connection requests based on the search criteria provided in your SEARCH_LINK.
-
-### 📜 Logging
-Logs of sent connection requests and responses are saved in the logs directory. You can review these logs to analyze the performance of your outreach strategy.
-
-## 🧠 AI Agent Mode (LinkedIn MCP)
-
-Instead of running the Selenium bot, you can drive LinkedIn from an AI agent (Claude Code, Codex, Cursor, …). The repo ships a project-scoped setup:
-
-- `.mcp.json` registers [stickerdaniel/linkedin-mcp-server](https://github.com/stickerdaniel/linkedin-mcp-server) as the `linkedin` MCP server (`uvx mcp-server-linkedin@latest`).
-- `.agents/skills/linkedin-mcp/` and `.claude/skills/linkedin-mcp/` contain its `linkedin-mcp` skill. `skills-lock.json` pins the source; `npx skills experimental_install` restores it.
-
-Setup:
-
-1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/).
-2. Sign in once: `uvx mcp-server-linkedin@latest --login`. The session is stored in `~/.linkedin-mcp/`, outside the repo.
-3. Open the repo in your agent and approve the project MCP server.
-
-Then ask the agent something like "find Anthropic's leadership and send them connection requests with a short note". The skill requires the agent to confirm the exact recipients and note before it calls `connect_with_person`.
-
-The same rules apply as for the bot: stay under 80 requests per week, and keep in mind that LinkedIn's User Agreement prohibits automated access.
-
-### 📅 Daily Outreach Automation (Orca)
-
-An [Orca](https://github.com/stablyai/orca) automation runs one agent round every day:
-
-1. **Warm-ups.** It reads your Connections page (Recently added) and Who's Viewed Your Profile in your own Chrome, through the omp browser relay. Then it sends a short, personalized self-intro to each new connection and to each 1st-degree viewer from the last 7 days. 2nd- and 3rd-degree viewers get an invite with a note instead. Anyone you already have a conversation with is skipped: the round opens their composer first and skips anyone with existing messages.
-2. **Cold invites.** It pages through the people searches in `.workflow/linkedin-outreach.json` and sends invites, up to `invites_per_day`.
-
-- `.workflow/linkedin-daily-outreach.md`: the runbook the agent follows, including the message voice.
-- `.workflow/linkedin-outreach.json`: caps, pacing and search audiences.
-- `.scripts/linkedin_outreach.py`: the ledger, kept in `~/.linkedin-outreach/`. It enforces daily caps, pacing between writes and one write per person. Its `precheck` skips the run when the round already finished today or Chrome is closed.
-- `.scripts/linkedin_pages.js`: the driver. It reads pages through the Chrome relay and writes through the LinkedIn MCP tools.
-
-Requirements: Chrome running and signed in to LinkedIn, the omp Chrome relay, and a signed-in LinkedIn MCP session.
-
-Three failed invites in a row pause invites until the next day. That is how LinkedIn's weekly invitation limit shows up. The limit is unpublished, typically around 100 per week.
-
-Inspect or run it with `orca automations list` and `orca automations run <id>`.
-
-### 🤝 Contributing
-
-Contributions are welcome! Please follow these steps to contribute:
-
-🍴 Fork the repository.
-
-🌿 Create a new branch (git checkout -b feature-branch).
-
-💻 Make your changes.
-
-📝 Commit your changes (git commit -am 'Add new feature').
-
-🚀 Push to the branch (git push origin feature-branch).
-
-📬 Open a pull request.
-
-
-### 📄 License
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
-
-### ⚠️ Disclaimer
-This bot is intended for educational and research purposes only. The use of automated bots on LinkedIn may violate LinkedIn's terms of service. Use at your own risk.
-
-### 🛠️ Support
-For any questions or issues, please feel free to reach out via GitHub Issues or Discussions.
-
-### 🙌 Acknowledgements
-🤖 Selenium for web automation
-
-🐍 Python for providing the programming language
-
-🌍 The LinkedIn community for providing a platform to connect professionals worldwide
-
-
-Made with ❤️ by [Pavlo Bondarenko](https://www.linkedin.com/in/mrbondarenko/)
+MIT. See [LICENSE](LICENSE). Forked from [OfficialCodeVoyage/LinkedIn_Auto_Connector_Bot](https://github.com/OfficialCodeVoyage/LinkedIn_Auto_Connector_Bot) by Pavlo Bondarenko.
