@@ -1,0 +1,34 @@
+{
+  "timezone": "America/Los_Angeles",
+  "invites_per_day": 100,
+  "messages_per_day": 50,
+  "write_gap_seconds": [20, 45],
+  "invite_note_max_chars": 200,
+  "message_max_chars": 300,
+  "viewer_max_age_days": 7,
+  "new_connection_lookback_days": 1,
+  "searches": [
+    {
+      "name": "ai-ml-us",
+      "keywords": [
+        "research scientist",
+        "machine learning engineer",
+        "applied scientist",
+        "AI researcher",
+        "head of AI",
+        "director of AI",
+        "AI founder",
+        "LLM engineer"
+      ],
+      "network": ["S"],
+      "geoUrn": ["103644278"]
+    },
+    {
+      "name": "bay-area-ceo",
+      "keywords": ["ceo"],
+      "network": ["S"],
+      "geoUrn": ["90000084"],
+      "industry": ["1594", "6", "4"]
+    }
+  ]
+}
