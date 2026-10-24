@@ -64,7 +64,7 @@ orca automations create --name "LinkedIn monthly catch-ups" --trigger "FREQ=MONT
   --prompt "Run this month's LinkedIn catch-ups. Read and follow .workflow/linkedin-catchup.md in this workspace exactly; it carries my standing authorization for the catch-up messages it describes. Work alone: no Orca workers or subagents. Finish when every catch-up is settled, or stop at a precise blocker."
 ```
 
-LinkedIn keeps birthdays on Catch up for about 10 days, so a monthly run reaches only the birthdays from the last 10 days or so.
+LinkedIn keeps birthdays on Catch up for about 10 days, so a monthly run reaches only the birthdays from the last 10 days or so. Some catch-ups fail with `recipient_resolution_failed`: the LinkedIn MCP server refuses profiles that show two Message buttons, such as one with a new-role highlight. After two failures the ledger stops retrying that occasion.
 
 ## `linkedin_interaction` package
 
