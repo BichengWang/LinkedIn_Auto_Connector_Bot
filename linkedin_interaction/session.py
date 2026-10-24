@@ -6,12 +6,14 @@ UI change touches only the module that uses that page.
 
 from __future__ import annotations
 
+import json
 import logging
 import random
 import sys
 import time
 from collections import Counter
 from collections.abc import Callable
+from pathlib import Path
 
 from selenium import webdriver
 from selenium.common.exceptions import (
@@ -19,6 +21,7 @@ from selenium.common.exceptions import (
     ElementNotInteractableException,
     StaleElementReferenceException,
     TimeoutException,
+    WebDriverException,
 )
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
@@ -91,13 +94,17 @@ class Session:
     # --- authentication -------------------------------------------------------------------------
 
     def login(self, timeout: float = 300) -> None:
-        """Reuse the persistent profile's session, else sign in and wait for the user to finish 2FA/captcha.
+        """Sign in, trying in order: the persistent profile's session, the cookie file in LINKEDIN_COOKIES,
+        LINKEDIN_USERNAME/LINKEDIN_PASSWORD, and finally a manual login. Waits for the user on 2FA/captcha.
 
         A logged-out visit to /feed/ redirects to a login or guest page, so landing on /feed means signed in.
         """
         self.open(FEED_URL)
         if self._on_feed():
             log.info("Using the existing LinkedIn session.")
+            return
+        if self.settings.cookies_file is not None and self._import_cookies(self.settings.cookies_file):
+            log.info("Signed in with the session cookies from %s.", self.settings.cookies_file)
             return
         self.open(LOGIN_URL)
         username = self.find_optional("//input[@id='username']", timeout=10)
@@ -116,6 +123,51 @@ class Session:
     def _on_feed(self) -> bool:
         # Chrome reports a null URL mid-navigation (e.g. right after the login form submits).
         return "/feed" in (self.driver.current_url or "")
+
+    def _import_cookies(self, path: Path) -> bool:
+        """Load a JSON cookie export (a list of {name, value, domain, …}, as Playwright and the LinkedIn MCP
+        server's ~/.linkedin-mcp/cookies.json write) into the browser; True when that reaches the feed.
+
+        The browser profile keeps the imported session, so later runs need neither the file nor a password.
+        """
+        try:
+            cookies = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            log.warning("Cannot read LINKEDIN_COOKIES file %s: %s", path, error)
+            return False
+        added = 0
+        for cookie in cookies if isinstance(cookies, list) else []:
+            domain = str(cookie.get("domain", ""))
+            if not (cookie.get("name") and domain.lstrip(".").endswith("linkedin.com")):
+                continue
+            entry = {
+                "name": cookie["name"],
+                "value": str(cookie.get("value", "")),
+                "domain": domain,
+                "path": cookie.get("path") or "/",
+                "secure": bool(cookie.get("secure")),
+                "httpOnly": bool(cookie.get("httpOnly")),
+            }
+            expires = cookie.get("expires", cookie.get("expiry", -1))
+            if isinstance(expires, (int, float)) and expires > 0:
+                if expires < time.time():
+                    continue
+                entry["expiry"] = int(expires)
+            if cookie.get("sameSite") in ("Strict", "Lax", "None"):
+                entry["sameSite"] = cookie["sameSite"]
+            try:
+                self.driver.add_cookie(entry)
+                added += 1
+            except WebDriverException as error:
+                log.debug("Skipped cookie %s: %s", cookie["name"], error.msg)
+        if not added:
+            log.warning("LINKEDIN_COOKIES file %s has no usable linkedin.com cookies.", path)
+            return False
+        self.open(FEED_URL)
+        if self._on_feed():
+            return True
+        log.warning("The cookies in %s did not sign in (expired session?); trying the next login method.", path)
+        return False
 
     # --- navigation and waiting -----------------------------------------------------------------
 

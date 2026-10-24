@@ -5,7 +5,7 @@
 Two ways to work LinkedIn from this repo:
 
 - **Daily outreach (agent-driven).** An AI agent grows your network on a schedule. It warms up new connections and profile viewers with a short, personal self-intro, and it sends targeted connection invites. The agent reads LinkedIn in your own Chrome, writes through the [LinkedIn MCP server](https://github.com/stickerdaniel/linkedin-mcp-server), and follows a runbook that a small ledger keeps honest.
-- **`linkedin_interaction` package.** A Python library and CLI for on-demand work, in six modules: communication, connection, social interaction, posts, job matching and job applying.
+- **`linkedin_interaction` package.** A Python library and CLI for on-demand work, in seven modules: communication, connection, social interaction, posts, profile visits, job matching and job applying.
 
 > ⚠️ LinkedIn's User Agreement prohibits automated access, and LinkedIn enforces an unpublished weekly invitation limit, typically around 100 per week. Going over it usually blocks invitations for a week. Use at your own risk.
 
@@ -18,7 +18,7 @@ Two ways to work LinkedIn from this repo:
 | `linkedin_interaction/` | The package: `session.py` (browser, login, pacing, per-run caps) plus one file per module |
 | `config.example.toml` | Settings template for the package; copy it to the git-ignored `config.toml` |
 | `AGENTS.md` / `CLAUDE.md` | Project rules every agent in this repo follows |
-| `.mcp.json`, `.agents/skills/`, `.claude/skills/`, `skills-lock.json` | Project-scoped LinkedIn MCP server and its `linkedin-mcp` skill |
+| `.mcp.json`, `.agents/skills/`, `.claude/skills/`, `skills-lock.json` | Project-scoped LinkedIn MCP server, its `linkedin-mcp` skill, and the repo's own `linkedin-profile-visits` skill |
 
 ## Daily outreach
 
@@ -60,6 +60,7 @@ Run a round on demand with `orca automations run <id>`. Inspect the ledger with 
 | `connection` | connect from a profile, invite a whole people search, accept person invitations | `connect profile / search / accept` |
 | `social` | follow people and companies, react to posts, comment | `social follow / react / comment` |
 | `posts` | publish text posts, read the feed | `post create / feed` |
+| `visits` | view profiles as you, so you show up in their "Who viewed your profile"; skips anyone viewed in the last `revisit_days` | `visit profile / search` |
 | `job_matching` | search jobs, keyword-filter them, rerank the best with Claude against your resume | `jobs match` |
 | `job_applying` | Easy Apply from your answers map, stopping at review for your y/N | `jobs apply` |
 
@@ -81,7 +82,7 @@ cp config.example.toml config.toml   # then edit; config.toml is git-ignored
 linkedin-interaction login           # log in once in the window that opens; leave it open until it closes itself
 ```
 
-The browser profile in `~/.linkedin-interaction/` keeps the session, so later runs skip the login. If `LINKEDIN_USERNAME` and `LINKEDIN_PASSWORD` are set, they're typed in for you. 2FA and captchas are always yours to complete in the window.
+The browser profile in `~/.linkedin-interaction/` keeps the session, so later runs skip the login. To sign in without a password, point `LINKEDIN_COOKIES` at a JSON cookie export of a signed-in session, such as the LinkedIn MCP server's `~/.linkedin-mcp/cookies.json`; it's imported once and the profile keeps it. Otherwise, if `LINKEDIN_USERNAME` and `LINKEDIN_PASSWORD` are set, they're typed in for you. 2FA and captchas are always yours to complete in the window.
 
 ### Usage
 
@@ -107,6 +108,11 @@ linkedin-interaction social comment https://www.linkedin.com/feed/update/urn:li:
 linkedin-interaction post feed --limit 5
 linkedin-interaction post create - < post.md
 
+# Profile visits (each person sees you in "Who viewed your profile" if your viewing mode shows your name)
+linkedin-interaction visit profile https://www.linkedin.com/in/someone/ another-username
+linkedin-interaction visit search --url "<people search URL>" --pages 3 --max 30
+python3 .scripts/linkedin_outreach.py candidates 30 | jq -r '.[].username' | linkedin-interaction visit profile -
+
 # Jobs
 linkedin-interaction jobs match                 # writes matches.json and prints a ranked list
 linkedin-interaction jobs apply --min-score 75  # Easy Apply to the saved matches, one review prompt each
@@ -116,6 +122,8 @@ linkedin-interaction jobs apply https://www.linkedin.com/jobs/view/<id>/
 Global flags: `--config PATH`, `--headless`, `-v`. Text arguments accept `-` to read from stdin. `--max` can only lower a cap from `[limits]`, never raise it.
 
 **Connection notes.** Set `connection.note` to at most 300 characters, or leave it empty to send invitations without a note. If LinkedIn blocks the note (free accounts get only a few personalized invitations a month), that person is skipped. The invitation is never sent silently without the note.
+
+**Profile visits.** A view counts when your signed-in browser renders the profile, so visits run in the real browser: a bare HTTP call to LinkedIn's internal API doesn't reliably register one. Each visit stays 8–20 s on the page and scrolls (`[visits]`). The history in `~/.linkedin-interaction/visits.sqlite3` skips anyone viewed in the last `revisit_days` (30); pass `--again` to override. Viewers show up by name only when LinkedIn's Settings → Visibility → Profile viewing options is set to your name and headline.
 
 ### Job matching and applying
 

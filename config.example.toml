@@ -1,7 +1,10 @@
 # Copy to config.toml (git-ignored) and edit. Every section and key is optional.
-# Credentials come from the environment, never from this file:
-#   LINKEDIN_USERNAME / LINKEDIN_PASSWORD  (optional: without them you log in by hand once;
-#   the browser profile keeps the session for later runs)
+# Credentials come from the environment, never from this file. The first that works wins:
+#   1. the session already saved in the browser profile below;
+#   2. LINKEDIN_COOKIES=<path to a JSON cookie export>, e.g. ~/.linkedin-mcp/cookies.json from the LinkedIn MCP
+#      server's `--login`; imported once, then kept by the browser profile;
+#   3. LINKEDIN_USERNAME / LINKEDIN_PASSWORD, typed into the login form;
+#   4. logging in by hand in the window. 2FA and captchas are always yours.
 
 [browser]
 name = "chrome"            # "chrome" or "firefox"
@@ -21,11 +24,18 @@ reactions = 30
 comments = 10
 posts = 2
 applications = 10
+visits = 40                # profile views per run
 
 [connection]
 # Build it on linkedin.com: search, pick the "People" filter, copy the URL.
 search_url = "https://www.linkedin.com/search/results/people/?keywords=engineering%20manager"
 note = """Hi, I'm expanding my network with engineering leaders and would be glad to connect."""  # max 300 chars; empty = no note
+
+[visits]                   # `visit profile` / `visit search`
+revisit_days = 30          # skip anyone viewed within this many days; 0 = always view again
+min_dwell = 8.0            # seconds spent on each profile, scrolling
+max_dwell = 20.0
+# history = "~/.linkedin-interaction/visits.sqlite3"   # who was viewed when (default shown)
 
 [jobs]
 keywords = "machine learning engineer"

@@ -12,7 +12,7 @@ DEFAULT_CONFIG_PATH = Path("config.toml")
 
 
 class Action(StrEnum):
-    """Write actions with a per-run cap. Values are the keys of the [limits] table."""
+    """Actions with a per-run cap. Values are the keys of the [limits] table."""
 
     CONNECTION = "connections"
     MESSAGE = "messages"
@@ -21,6 +21,7 @@ class Action(StrEnum):
     COMMENT = "comments"
     POST = "posts"
     APPLICATION = "applications"
+    VISIT = "visits"  # profile views: not a write, but LinkedIn restricts accounts that view too many
 
 
 DEFAULT_LIMITS: dict[Action, int] = {
@@ -31,6 +32,7 @@ DEFAULT_LIMITS: dict[Action, int] = {
     Action.COMMENT: 10,
     Action.POST: 2,
     Action.APPLICATION: 10,
+    Action.VISIT: 40,
 }
 
 
@@ -92,6 +94,14 @@ class ApplyingSettings:
 
 
 @dataclass(frozen=True)
+class VisitSettings:
+    revisit_days: int = 30  # skip anyone this tool viewed within this many days; 0 = never skip
+    min_dwell: float = 8.0  # seconds spent on each profile, scrolling
+    max_dwell: float = 20.0
+    history: Path = field(default_factory=lambda: Path.home() / ".linkedin-interaction" / "visits.sqlite3")
+
+
+@dataclass(frozen=True)
 class Settings:
     browser: BrowserSettings = field(default_factory=BrowserSettings)
     pacing: Pacing = field(default_factory=Pacing)
@@ -100,8 +110,10 @@ class Settings:
     jobs: JobSearchSettings = field(default_factory=JobSearchSettings)
     matching: MatchingSettings = field(default_factory=MatchingSettings)
     applying: ApplyingSettings = field(default_factory=ApplyingSettings)
+    visits: VisitSettings = field(default_factory=VisitSettings)
     username: str | None = None
     password: str | None = None
+    cookies_file: Path | None = None  # JSON cookie export holding a signed-in session (LINKEDIN_COOKIES)
 
 
 class ConfigError(ValueError):
@@ -119,7 +131,7 @@ def load_settings(path: Path | None = None) -> Settings:
 
 
 def parse_settings(raw: dict) -> Settings:
-    known = {"browser", "pacing", "limits", "connection", "jobs", "matching", "applying"}
+    known = {"browser", "pacing", "limits", "connection", "jobs", "matching", "applying", "visits"}
     _reject_unknown("top level", raw, known)
 
     browser_raw = dict(raw.get("browser", {}))
@@ -168,6 +180,17 @@ def parse_settings(raw: dict) -> Settings:
     if "answers" in applying_raw:
         applying_raw["answers"] = {str(k): str(v) for k, v in applying_raw["answers"].items()}
 
+    visits_raw = dict(raw.get("visits", {}))
+    if visits_raw.get("history"):
+        visits_raw["history"] = _path(visits_raw["history"])
+    else:
+        visits_raw.pop("history", None)
+    visits = _build(VisitSettings, visits_raw, "visits")
+    if not isinstance(visits.revisit_days, int) or visits.revisit_days < 0:
+        raise ConfigError("visits.revisit_days must be a non-negative integer")
+    if not 0 <= visits.min_dwell <= visits.max_dwell:
+        raise ConfigError("visits needs 0 <= min_dwell <= max_dwell")
+
     return Settings(
         browser=browser,
         pacing=pacing,
@@ -176,8 +199,10 @@ def parse_settings(raw: dict) -> Settings:
         jobs=jobs,
         matching=_build(MatchingSettings, matching_raw, "matching"),
         applying=_build(ApplyingSettings, applying_raw, "applying"),
+        visits=visits,
         username=os.getenv("LINKEDIN_USERNAME") or None,
         password=os.getenv("LINKEDIN_PASSWORD") or None,
+        cookies_file=_path(cookies) if (cookies := os.getenv("LINKEDIN_COOKIES")) else None,
     )
 
 
