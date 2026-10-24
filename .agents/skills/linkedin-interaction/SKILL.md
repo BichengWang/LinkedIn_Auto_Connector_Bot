@@ -55,12 +55,15 @@ shares (`/posts/<slug>-share-…`, `/posts/<slug>-activity-…`, `/feed/update/u
 
 ### Voice for replies on Kenneth's technical posts
 
-- Answer the question asked, in the first sentence. Then at most two more sentences: one concrete fact from
-  the post or its source, optionally one question back that keeps the thread going.
+- Open positive: credit what the comment gets right ("Great question, and you've put your finger on…").
+  Kenneth asked for a more positive tone than a bare factual answer (2026-10-24).
+- Then answer the question asked, with one concrete fact from the post or its source, and close with one
+  question back that keeps the thread going. 3–4 sentences.
 - Same honesty bar as the posts: state what the tool does and does not do; no roadmap, users, adoption or
-  benchmarks that a source doesn't show. If the answer is "not built" or "out of scope", say so plainly.
-- Warm peer, not marketing: thank them only when the comment adds something, by naming what it adds.
-  No hashtags, no links unless asked, no emoji. Don't repeat the @mention LinkedIn already inserted.
+  benchmarks that a source doesn't show. "Out of scope" or "not built" can be framed as a direction worth
+  exploring, never as a plan or date.
+- Warm peer, not marketing. No hashtags, no links unless asked, no emoji. Don't repeat the @mention LinkedIn
+  already inserted.
 - ≤ 600 characters. English unless the commenter wrote in another language.
 
 ## Use cases
@@ -78,6 +81,12 @@ shares (`/posts/<slug>-share-…`, `/posts/<slug>-activity-…`, `/feed/update/u
   what was proposed and approved; it doesn't capture what's needed to rerun the proposer, so a rerun that
   proposes something else is a new decision needing its own review.
 - Run: `$V social comments <post>` → draft → user approves → `$V social reply <post> 7519143361769799681 -`.
+- Sent 2026-10-24 as reply `7519819413177692160`, approved text:
+  "Great question, and you've put your finger on exactly the right gap. Today it's out of scope on purpose: the
+  record freezes what the reviewer actually approved (the proposal, the ticket snapshot and the policy digest),
+  so a rerun that proposes something different becomes a new decision with its own review. Capturing enough to
+  rerun the proposal step is a direction I'd love to explore. Would you use it more to audit past approvals, or
+  to catch drift before approval?"
 
 Add later use cases here in the same shape: post, comment, facts the reply relies on, command.
 
