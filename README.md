@@ -18,7 +18,7 @@ Two ways to work LinkedIn from this repo:
 | `linkedin_interaction/` | The package: `session.py` (browser, login, pacing, per-run caps) plus one file per module |
 | `config.example.toml` | Settings template for the package; copy it to the git-ignored `config.toml` |
 | `AGENTS.md` / `CLAUDE.md` | Project rules every agent in this repo follows |
-| `.mcp.json`, `.agents/skills/`, `.claude/skills/`, `skills-lock.json` | Project-scoped LinkedIn MCP server, its `linkedin-mcp` skill, and the repo's own `linkedin-profile-visits` skill |
+| `.mcp.json`, `.agents/skills/`, `.claude/skills/`, `skills-lock.json` | Project-scoped LinkedIn MCP server, its `linkedin-mcp` skill, and the repo's own `linkedin-profile-visits` and `linkedin-interaction` skills |
 
 ## Daily outreach
 
@@ -58,7 +58,7 @@ Run a round on demand with `orca automations run <id>`. Inspect the ledger with 
 |---|---|---|
 | `communication` | send messages, list the inbox, read and reply to threads | `message send / inbox / read / reply` |
 | `connection` | connect from a profile, invite a whole people search, accept person invitations | `connect profile / search / accept` |
-| `social` | follow people and companies, react to posts, comment | `social follow / react / comment` |
+| `social` | follow people and companies, react to posts, comment, list a post's comments and reply to them | `social follow / react / comment / comments / reply` |
 | `posts` | publish text posts, read the feed | `post create / feed` |
 | `visits` | view profiles as you, so you show up in their "Who viewed your profile"; skips anyone viewed in the last `revisit_days` | `visit profile / search` |
 | `job_matching` | search jobs, keyword-filter them, rerank the best with Claude against your resume | `jobs match` |
@@ -103,6 +103,8 @@ linkedin-interaction message reply "Jane Doe" - < reply.txt
 linkedin-interaction social follow https://www.linkedin.com/company/anthropic/
 linkedin-interaction social react https://www.linkedin.com/feed/update/urn:li:activity:<id>/ --type celebrate
 linkedin-interaction social comment https://www.linkedin.com/feed/update/urn:li:activity:<id>/ "Great write-up"
+linkedin-interaction social comments https://www.linkedin.com/posts/<slug>/   # ids, replies, "[awaiting your reply]"
+linkedin-interaction social reply https://www.linkedin.com/posts/<slug>/ <comment-id> - < reply.txt
 
 # Posts
 linkedin-interaction post feed --limit 5

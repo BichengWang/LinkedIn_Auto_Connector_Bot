@@ -200,6 +200,37 @@ def _social_comment(args, settings):
     return settings, run
 
 
+def _social_comments(args, settings):
+    if args.limit < 1:
+        raise UsageError("--limit must be at least 1")
+
+    def run(session: Session) -> None:
+        comments = social.read_comments(session, args.post_url, args.limit)
+        waiting = {c.id for c in social.awaiting_reply(comments)}
+        for item in comments:
+            indent = "    ↳ " if item.is_reply else ""
+            flag = " (you)" if item.mine else "  [awaiting your reply]" if item.id in waiting else ""
+            print(f"{indent}{item.id}  {item.author}  {item.profile}{flag}")
+            pad = "      " if item.is_reply else "  "
+            print("\n".join(pad + line for line in item.text.splitlines()) + "\n")
+        print(f"{len(comments)} comment(s); {len(waiting)} awaiting your reply.")
+
+    return settings, run
+
+
+def _social_reply(args, settings):
+    text = _text(args.text)
+
+    def run(session: Session) -> None:
+        target, sent = social.reply(session, args.post_url, args.comment, text)
+        if sent:
+            print(f"Replied to {target.author} ({target.id}) on {args.post_url}")
+        else:
+            print(f"Already replied to {target.author} ({target.id}) with this text; nothing sent.")
+
+    return settings, run
+
+
 def _post_create(args, settings):
     text = _text(args.text)
     if len(text) > posts.MAX_POST_LENGTH:
@@ -389,7 +420,7 @@ def _build_parser() -> argparse.ArgumentParser:
     cmd.add_argument("text", help="message text, or - to read it from stdin")
     cmd.set_defaults(command=_message_reply)
 
-    social_group = actions("social", "follow, react and comment")
+    social_group = actions("social", "follow, react, comment and reply to comments")
     cmd = social_group.add_parser("follow", help="follow a person (/in/) or company (/company/)")
     cmd.add_argument("url")
     cmd.set_defaults(command=_social_follow)
@@ -401,6 +432,15 @@ def _build_parser() -> argparse.ArgumentParser:
     cmd.add_argument("post_url")
     cmd.add_argument("text", help="comment text, or - to read it from stdin")
     cmd.set_defaults(command=_social_comment)
+    cmd = social_group.add_parser("comments", help="list a post's comments and replies, flagging ones awaiting your reply")
+    cmd.add_argument("post_url")
+    cmd.add_argument("--limit", type=int, default=200, help="read at most N comments and replies (default: 200)")
+    cmd.set_defaults(command=_social_comments)
+    cmd = social_group.add_parser("reply", help="reply to a comment on a post")
+    cmd.add_argument("post_url")
+    cmd.add_argument("comment", help="comment id from `social comments`, or the commenter's name if they left one comment")
+    cmd.add_argument("text", help="reply text, or - to read it from stdin")
+    cmd.set_defaults(command=_social_reply)
 
     post = actions("post", "publish posts and read the feed")
     cmd = post.add_parser("create", help="publish a text post")

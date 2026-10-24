@@ -2,17 +2,29 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from enum import StrEnum
 from urllib.parse import unquote, urlparse
 
 from selenium.webdriver.remote.webelement import WebElement
 
 from .config import Action
-from .session import LinkedInError, Session, xpath_literal
+from .session import BASE_URL, LinkedInError, Session, xpath_literal
+from .visits import profile_key
 
 log = logging.getLogger(__name__)
 
-__all__ = ["Reaction", "follow", "react", "comment"]
+__all__ = [
+    "Comment",
+    "Reaction",
+    "awaiting_reply",
+    "comment",
+    "find_comment",
+    "follow",
+    "react",
+    "read_comments",
+    "reply",
+]
 
 OWNER_CONTROL_XPATH = "//main//*[self::button or @role='button'][@aria-label={label}]"
 PERSON_FOLLOW_STATE_XPATH = (
@@ -83,6 +95,48 @@ COMMENT_TEXT_XPATH = (
 )
 
 
+# Post pages (SDUI) list comments and replies as flat siblings; a reply is told apart only by its indent.
+COMMENT_ITEM_XPATH = "//main//*[starts-with(@componentkey,'replaceableComment_urn:li:comment:')]"
+COMMENT_BY_ID_XPATH = (
+    "//main//*[starts-with(@componentkey,'replaceableComment_urn:li:comment:') and contains(@componentkey,{suffix})]"
+)
+COMMENT_ID_RE = re.compile(r",(\d+)\)$")
+MORE_REPLIES_XPATH = (
+    "//main//*[self::button or @role='button'][starts-with(normalize-space(),'See previous replies') "
+    "or (starts-with(normalize-space(),'See ') and contains(normalize-space(),' more repl'))]"
+)
+REPLY_BUTTON_XPATH = ".//button[@aria-label='Reply']"
+EDITOR_XPATH = "//main//*[@contenteditable='true' and @role='textbox']"
+REPLY_SUBMIT_XPATH = "./following::button[normalize-space()='Reply'][not(@disabled) and not(@aria-disabled='true')]"
+OWN_PROFILE_URL = f"{BASE_URL}/in/me/"
+REPLY_INDENT = 8  # px; replies sit about 40 px right of top-level comments
+MAX_EXPANSIONS = 50
+COMMENTS_SCRIPT = r"""
+const container = document.querySelector("main [componentkey*='pagedCommentsContainer']");
+if (!container) return [];
+return [...container.querySelectorAll("[componentkey^='replaceableComment_urn:li:comment:']")].map(item => {
+    const link = item.querySelector("a[href*='/in/'], a[href*='/company/']");
+    const label = item.querySelector("[aria-label^='View '][aria-label$='profile'], img[alt^='View ']");
+    const avatar = item.querySelector('figure');
+    const box = item.querySelector("[data-testid='expandable-text-box']");
+    let text = '';
+    if (box) {
+        const copy = box.cloneNode(true);
+        copy.querySelectorAll("[data-testid='expandable-text-button']").forEach(node => node.remove());
+        copy.querySelectorAll('br').forEach(node => node.replaceWith('\n'));
+        text = copy.textContent;
+    }
+    return {
+        key: item.getAttribute('componentkey'),
+        href: link ? link.href : '',
+        label: label ? (label.getAttribute('aria-label') || label.getAttribute('alt')) : '',
+        text: text,
+        left: avatar ? avatar.getBoundingClientRect().left : 0,
+    };
+});
+"""
+
+
 class Reaction(StrEnum):
     """Reactions supported by LinkedIn posts."""
 
@@ -92,6 +146,18 @@ class Reaction(StrEnum):
     LOVE = "love"
     INSIGHTFUL = "insightful"
     FUNNY = "funny"
+
+
+@dataclass(frozen=True)
+class Comment:
+    """A comment or reply under a post, in page order."""
+
+    id: str  # the number in urn:li:comment:(activity:…,<id>)
+    author: str
+    profile: str
+    text: str
+    is_reply: bool
+    mine: bool
 
 
 def follow(session: Session, url: str) -> bool:
@@ -208,6 +274,164 @@ def comment(session: Session, post_url: str, text: str) -> None:
         or not (editor.get_attribute("innerText") or "").strip(), 10
     ):
         raise LinkedInError("Comment submission could not be confirmed: the new comment did not appear")
+
+
+def read_comments(session: Session, post_url: str, limit: int = 200) -> list[Comment]:
+    """The post's comments and replies in page order, after loading more and expanding reply threads."""
+    return _read_comments(session, post_url, limit)[1]
+
+
+def awaiting_reply(comments: list[Comment]) -> list[Comment]:
+    """Top-level comments by others with no reply from you in their thread."""
+    return [parent for parent, replies in _threads(comments) if not parent.mine and not any(r.mine for r in replies)]
+
+
+def find_comment(comments: list[Comment], target: str) -> Comment:
+    """The comment with id `target`, else the one top-level comment by author `target` (case-insensitive)."""
+    target = target.strip()
+    for item in comments:
+        if item.id == target:
+            return item
+    matches = [c for c in comments if not c.is_reply and c.author.casefold() == target.casefold()]
+    if not matches:
+        raise LinkedInError(f"No comment {target!r} on this post; list them with `social comments`")
+    if len(matches) > 1:
+        ids = ", ".join(c.id for c in matches)
+        raise LinkedInError(f"{target} has {len(matches)} comments on this post ({ids}); pass the comment id")
+    return matches[0]
+
+
+def reply(session: Session, post_url: str, target: str, text: str) -> tuple[Comment, bool]:
+    """Reply in the thread of comment `target` (id or author, see find_comment).
+
+    Returns the target and False, without sending, when you already posted this text in that thread,
+    so a retry after an unconfirmed submission cannot post twice.
+    """
+    text = text.strip()
+    if not text:
+        raise ValueError("reply text must not be empty")
+    me, comments = _read_comments(session, post_url, 200)
+    target_comment = find_comment(comments, target)
+    wanted = _squash(text)
+    thread = next((parent, *replies) for parent, replies in _threads(comments) if target_comment in (parent, *replies))
+    if any(c.mine and wanted in _squash(c.text) for c in thread):
+        return target_comment, False
+    item = session.find(COMMENT_BY_ID_XPATH.format(suffix=xpath_literal(f",{target_comment.id})")))
+    previous = {editor.id for editor in session.find_all(EDITOR_XPATH, visible_only=False)}
+    session.click(session.find(REPLY_BUTTON_XPATH, root=item))
+
+    def new_editor() -> WebElement | None:
+        return next((e for e in session.find_all(EDITOR_XPATH) if e.id not in previous), None)
+
+    if not session.wait_until(new_editor, 10):
+        raise LinkedInError(f"Reply box did not open under {target_comment.author}'s comment")
+    editor = new_editor()
+    mention = editor.get_attribute("innerText") or ""  # LinkedIn pre-fills an @mention of the commenter
+    session.type_text(editor, text)
+    session.pause()
+    if _squash(editor.get_attribute("innerText") or "") != _squash(f"{mention} {text}"):
+        raise LinkedInError("The reply box did not take the text as typed; nothing was sent")
+    submit = session.find(REPLY_SUBMIT_XPATH, root=editor)
+    known = {c.id for c in comments}
+    session.spend(Action.COMMENT)
+    session.click(submit)
+    if not session.wait_until(
+        lambda: any(
+            c.mine and c.id not in known and wanted in _squash(c.text) for c in _page_comments(session, me)
+        ),
+        15,
+    ):
+        raise LinkedInError("Reply submission could not be confirmed: the new reply did not appear")
+    return target_comment, True
+
+
+def _read_comments(session: Session, post_url: str, limit: int) -> tuple[str, list[Comment]]:
+    if limit < 1:
+        raise ValueError("comment limit must be at least 1")
+    session.open(OWN_PROFILE_URL)  # LinkedIn redirects /in/me/ to your own profile
+    try:
+        me = profile_key(session.driver.current_url or "")
+    except ValueError as error:
+        raise LinkedInError(f"Could not resolve your own profile from {OWN_PROFILE_URL}: {error}") from error
+    session.open(post_url)
+    _primary_post(session, post_url)
+    session.find_optional(COMMENT_ITEM_XPATH, timeout=5)
+    _load_comments(session, limit)
+    return me, _page_comments(session, me)[:limit]
+
+
+def _load_comments(session: Session, limit: int) -> None:
+    """Expand reply threads and load more comments until the list stops growing or reaches `limit`.
+
+    Post pages scroll inside <main>, not the window, so scrolling the last comment into view loads the next batch.
+    """
+    expansions = 0
+    while True:
+        while expansions < MAX_EXPANSIONS and (more := session.find_optional(MORE_REPLIES_XPATH, timeout=0)):
+            session.click(more)
+            expansions += 1
+            session.pause(0.3)
+        items = session.find_all(COMMENT_ITEM_XPATH, visible_only=False)
+        if not items or len(items) >= limit:
+            return
+        count = len(items)
+        session.driver.execute_script("arguments[0].scrollIntoView({block: 'end'});", items[-1])
+        if not session.wait_until(lambda: len(session.find_all(COMMENT_ITEM_XPATH, visible_only=False)) > count, 6):
+            return
+
+
+def _page_comments(session: Session, me: str) -> list[Comment]:
+    return _comments_from_page(session.driver.execute_script(COMMENTS_SCRIPT) or [], me)
+
+
+def _comments_from_page(raw: list[dict], me: str) -> list[Comment]:
+    """Build comments from COMMENTS_SCRIPT rows; `me` is your profile key."""
+    if not raw:
+        return []
+    base = min(row["left"] for row in raw)
+    comments: list[Comment] = []
+    for row in raw:
+        match = COMMENT_ID_RE.search(row["key"] or "")
+        if match is None:
+            continue
+        href = (row["href"] or "").split("?")[0]
+        comments.append(
+            Comment(
+                id=match.group(1),
+                author=_author_name(row["label"] or ""),
+                profile=href,
+                text=(row["text"] or "").strip(),
+                is_reply=row["left"] > base + REPLY_INDENT,
+                mine=_is_profile(href, me),
+            )
+        )
+    return comments
+
+
+def _threads(comments: list[Comment]) -> list[tuple[Comment, list[Comment]]]:
+    threads: list[tuple[Comment, list[Comment]]] = []
+    for item in comments:
+        if item.is_reply and threads:
+            threads[-1][1].append(item)
+        else:
+            threads.append((item, []))
+    return threads
+
+
+def _author_name(label: str) -> str:
+    match = re.fullmatch(r"View (.+?)[’']s (?:profile|page)", label.strip())
+    return match.group(1) if match else label.strip()
+
+
+def _is_profile(href: str, key: str) -> bool:
+    try:
+        return profile_key(href) == key
+    except ValueError:
+        return False
+
+
+def _squash(text: str) -> str:
+    return " ".join(text.split())
 
 
 def _primary_post(session: Session, url: str) -> WebElement:
