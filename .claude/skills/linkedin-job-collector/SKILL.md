@@ -40,9 +40,9 @@ profile.
 | Only the N most recently saved | `$V jobs collect --limit 10` |
 | Re-fetch jobs that already have a file | `$V jobs collect --refresh` |
 
-- Reading the tracker takes about 3 s a page (10 jobs). Each new job then takes 5–10 s, so a first run over
-  about 100 jobs runs 10–15 minutes. Run it in the background, without a short timeout.
-- Reruns fetch only jobs without a file, so a daily rerun takes about a minute.
+- Reading the tracker takes about 3 s a page (10 jobs). Each new job then takes about 10 s, so a first run
+  over 120 jobs takes about 20 minutes. Run it in the background, without a short timeout.
+- Reruns fetch only jobs without a file: with nothing new, a rerun takes under a minute.
 - `--refresh` overwrites the job files. Keep the user's own notes in other files.
 
 Output, all in the folder:
