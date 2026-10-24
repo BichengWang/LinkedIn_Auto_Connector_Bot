@@ -49,6 +49,9 @@ def test_partial_limits_keep_other_defaults():
         {"browser": {"name": "safari"}},
         {"pacing": {"min_delay": 5, "max_delay": 1}},
         {"jobs": {"posted_within": "year"}},
+        {"visits": {"revisit_days": -1}},
+        {"visits": {"min_dwell": 30, "max_dwell": 5}},
+        {"visits": {"revisit_day": 7}},
     ],
 )
 def test_invalid_values_are_rejected(raw):

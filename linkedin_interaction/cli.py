@@ -12,7 +12,7 @@ from pathlib import Path
 
 from selenium.common.exceptions import WebDriverException
 
-from . import communication, connection, job_applying, job_matching, posts, social
+from . import communication, connection, job_applying, job_matching, posts, social, visits
 from .config import Action, ConfigError, Settings, load_settings
 from .session import LinkedInError, Session
 
@@ -221,6 +221,54 @@ def _post_feed(args, settings):
     return settings, run
 
 
+def _visit_targets(values: list[str]) -> list[str]:
+    """Profile keys from URLs or usernames, in order and without repeats; "-" reads them from stdin."""
+    raw: list[str] = []
+    for value in values:
+        raw += sys.stdin.read().split() if value == "-" else [value]
+    keys: list[str] = []
+    for value in raw:
+        key = visits.profile_key(value)
+        if key not in keys:
+            keys.append(key)
+    if not keys:
+        raise UsageError("no profiles to visit")
+    return keys
+
+
+def _print_visits(results: list[visits.VisitResult]) -> None:
+    for result in results:
+        print(result.line())
+    viewed = sum(r.status is visits.VisitStatus.VISITED for r in results)
+    print(f"Viewed {viewed} profile(s); {len(results) - viewed} skipped or unavailable.")
+
+
+def _visit_profile(args, settings):
+    keys = _visit_targets(args.targets)
+    settings = _cap(settings, Action.VISIT, args.max)
+
+    def run(session: Session) -> None:
+        with visits.VisitHistory(settings.visits.history) as history:
+            _print_visits(visits.visit_profiles(session, keys, history, settings.visits, again=args.again))
+
+    return settings, run
+
+
+def _visit_search(args, settings):
+    url = args.url or settings.connection.search_url
+    if not url:
+        raise UsageError("no search URL: pass --url or set connection.search_url in config.toml")
+    if args.pages < 1:
+        raise UsageError("--pages must be at least 1")
+    settings = _cap(settings, Action.VISIT, args.max)
+
+    def run(session: Session) -> None:
+        with visits.VisitHistory(settings.visits.history) as history:
+            _print_visits(visits.visit_from_search(session, url, history, settings.visits, max_pages=args.pages))
+
+    return settings, run
+
+
 def _jobs_match(args, settings):
     overrides = {
         key: value
@@ -361,6 +409,18 @@ def _build_parser() -> argparse.ArgumentParser:
     cmd = post.add_parser("feed", help="print recent feed posts")
     cmd.add_argument("--limit", type=int, default=10)
     cmd.set_defaults(command=_post_feed)
+
+    visit = actions("visit", "view profiles so you show up in their 'Who viewed your profile'")
+    cmd = visit.add_parser("profile", help="view the given profiles")
+    cmd.add_argument("targets", nargs="+", help="profile URLs or usernames; - reads them from stdin, whitespace-separated")
+    cmd.add_argument("--again", action="store_true", help="also view people viewed within visits.revisit_days")
+    cmd.add_argument("--max", type=int, help="view at most N profiles (never above limits.visits)")
+    cmd.set_defaults(command=_visit_profile)
+    cmd = visit.add_parser("search", help="view people from a people-search result, skipping recent visits")
+    cmd.add_argument("--url", help="people-search URL (default: connection.search_url)")
+    cmd.add_argument("--pages", type=int, default=5, help="result pages to read (default: 5)")
+    cmd.add_argument("--max", type=int, help="view at most N profiles (never above limits.visits)")
+    cmd.set_defaults(command=_visit_search)
 
     jobs = actions("jobs", "job matching and Easy Apply")
     cmd = jobs.add_parser("match", help="search jobs, score them against your profile, save matches")
