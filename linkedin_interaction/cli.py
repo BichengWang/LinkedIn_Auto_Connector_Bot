@@ -12,7 +12,7 @@ from pathlib import Path
 
 from selenium.common.exceptions import WebDriverException
 
-from . import communication, connection, job_applying, job_matching, posts, social, visits
+from . import communication, connection, job_applying, job_collecting, job_matching, posts, social, visits
 from .config import Action, ConfigError, Settings, load_settings
 from .session import LinkedInError, Session
 
@@ -368,6 +368,23 @@ def _jobs_apply(args, settings):
     return settings, run
 
 
+def _jobs_collect(args, settings):
+    if args.limit is not None and args.limit < 1:
+        raise UsageError("--limit must be at least 1")
+    out_dir = args.out.expanduser()
+
+    def run(session: Session) -> None:
+        results = job_collecting.collect_jobs(session, out_dir, args.stage, refresh=args.refresh, limit=args.limit)
+        for result in results:
+            where = result.path.name if result.path is not None else job_collecting.job_url(result.job_id)
+            print(f"{result.status.value:>9}  {where}" + (f"  ({result.detail})" if result.detail else ""))
+        counts = {status: sum(r.status is status for r in results) for status in job_collecting.CollectStatus}
+        print(", ".join(f"{count} {status.value}" for status, count in counts.items())
+              + f". Index: {out_dir / f'{args.stage}-jobs.md'}")
+
+    return settings, run
+
+
 # --- parser ------------------------------------------------------------------------------------
 
 
@@ -462,7 +479,13 @@ def _build_parser() -> argparse.ArgumentParser:
     cmd.add_argument("--max", type=int, help="view at most N profiles (never above limits.visits)")
     cmd.set_defaults(command=_visit_search)
 
-    jobs = actions("jobs", "job matching and Easy Apply")
+    jobs = actions("jobs", "collect tracked jobs, job matching and Easy Apply")
+    cmd = jobs.add_parser("collect", help="save your job-tracker jobs (default: Saved) as Markdown files")
+    cmd.add_argument("--stage", choices=job_collecting.STAGES, default="saved", help="job tracker tab (default: saved)")
+    cmd.add_argument("--out", type=Path, default=Path("~/linkedin-jobs"), help="folder (default: ~/linkedin-jobs)")
+    cmd.add_argument("--refresh", action="store_true", help="re-fetch jobs that already have a file")
+    cmd.add_argument("--limit", type=int, help="only the first N jobs in the tracker (the most recent)")
+    cmd.set_defaults(command=_jobs_collect)
     cmd = jobs.add_parser("match", help="search jobs, score them against your profile, save matches")
     cmd.add_argument("--keywords", help="default: jobs.keywords")
     cmd.add_argument("--location", help="default: jobs.location (ignored by LinkedIn's newer search; use --geo-id)")
