@@ -66,6 +66,16 @@ JOB_EASY_APPLY = (
     "//main//button[normalize-space()='Easy Apply' or "
     "starts-with(@aria-label, 'Easy Apply')][not(@disabled)]"
 )
+# Strips the "… more" toggle and keeps list items as "- " bullets, which innerText alone flattens to bare lines.
+DESCRIPTION_TEXT = (
+    "const box = arguments[0];"
+    "box.querySelectorAll('button').forEach(button => button.remove());"
+    "box.querySelectorAll('li').forEach(item => {"
+    "const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT); let node;"
+    "while ((node = walker.nextNode()) && !node.data.trim());"
+    "if (node) node.data = '- ' + node.data.trimStart(); });"
+    "return box.innerText;"
+)
 
 SYSTEM_PROMPT = (
     "You are a hiring manager evaluating a candidate against a job's actual requirements. "
@@ -250,7 +260,8 @@ def fetch_description(session: Session, job: Job) -> Job:
     description_element = session.find_optional(JOB_DESCRIPTION, timeout=3)
     if description_element is None:
         description_element = session.find(JOB_DESCRIPTION_LEGACY)
-    description = (description_element.get_attribute("innerText") or "").strip()
+    description = (session.driver.execute_script(DESCRIPTION_TEXT, description_element) or "").strip()
+    description = re.sub(r"(?:[ \t]*\n){3,}", "\n\n", re.sub(r"^About the job\s*", "", description))
     if not description:
         raise LinkedInError(f"Job {job.id} has no readable description")
     page_title = session.driver.title.removesuffix(" | LinkedIn")
