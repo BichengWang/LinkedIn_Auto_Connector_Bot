@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Ledger and guard rails for the daily LinkedIn outreach round.
+"""Ledger and guard rails for the LinkedIn outreach and catch-up rounds.
 
-`.workflow/linkedin-daily-outreach.md` is the runbook. The round reads LinkedIn
-in Chrome and writes through the LinkedIn MCP server; this ledger decides who is
-due and enforces the daily caps, the invite pause and per-person dedupe, so
-nobody is invited or messaged twice even when a run dies halfway.
+`.workflow/linkedin-daily-outreach.md` and `.workflow/linkedin-catchup.md` are
+the runbooks. A round reads LinkedIn in Chrome and writes through the LinkedIn
+MCP server; this ledger decides who is due and enforces the daily caps, the
+invite pause and per-person dedupe, so nobody is invited, warmed up or
+congratulated on the same occasion twice even when a run dies halfway.
 
 Exit codes: 0 ok, 1 precheck says skip, 2 refused for this person, 3 stop this
 kind of write for today (cap reached or invites paused).
@@ -48,8 +49,9 @@ CREATE TABLE IF NOT EXISTS people (
 CREATE TABLE IF NOT EXISTS actions (
     id       INTEGER PRIMARY KEY,
     username TEXT NOT NULL,
-    kind     TEXT NOT NULL,  -- invite | message
-    reason   TEXT NOT NULL,  -- search | viewer | connection
+    kind     TEXT NOT NULL,  -- invite | message | catchup
+    reason   TEXT NOT NULL,  -- search | viewer | connection | birthday | job_change | work_anniversary | education
+    occasion TEXT,           -- catch-ups only: one per person and occasion, e.g. birthday:2026
     day      TEXT NOT NULL,
     at       TEXT NOT NULL,
     text     TEXT,
@@ -74,6 +76,8 @@ def open_db():
     db = sqlite3.connect(HOME / "ledger.sqlite3", isolation_level=None)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
+    if "occasion" not in {row["name"] for row in db.execute("PRAGMA table_info(actions)")}:
+        db.execute("ALTER TABLE actions ADD COLUMN occasion TEXT")
     return db
 
 
@@ -105,12 +109,12 @@ def used_today(db, kind):
     ).fetchone()[0]
 
 
-def blocked(db, username, kind):
-    """One write per person and kind; two proven failures retire the person."""
+def blocked(db, username, kind, occasion=None):
+    """One write per person and kind (per occasion for catch-ups); two proven failures retire it."""
     live, failed = db.execute(
         "SELECT count(*) FILTER (WHERE outcome != 'failed'), count(*) FILTER (WHERE outcome = 'failed')"
-        " FROM actions WHERE username = ? AND kind = ?",
-        (username, kind),
+        " FROM actions WHERE username = ? AND kind = ? AND occasion IS ?",
+        (username, kind, occasion),
     ).fetchone()
     return live > 0 or failed >= 2
 
@@ -127,6 +131,19 @@ def upsert(db, row):
         " headline = coalesce(excluded.headline, headline), degree = coalesce(excluded.degree, degree)",
         (row["username"], row.get("name"), row.get("headline"), row.get("degree"), now().isoformat()),
     )
+
+
+def catchup_occasion(row):
+    """Dedupe key of a catch-up card. Birthdays and work anniversaries come once a year."""
+    if row["reason"] in ("birthday", "work_anniversary"):
+        year = today().year
+        # "Celebrate Joyce's recent birthday on Oct 22": a December date read in January is last year's.
+        if match := re.search(r"\bon ([A-Z][a-z]{2}) (\d{1,2})\b", row.get("detail") or ""):
+            month = datetime.strptime(match[1], "%b").month
+            if (month, int(match[2])) > (today().month, today().day):
+                year -= 1
+        return f"{row['reason']}:{year}"
+    return f"{row['reason']}:{row['text']}"  # the text names the new company or school
 
 
 def viewed_at(text):
@@ -262,8 +279,26 @@ def due(db, args):
     emit(items)
 
 
+def catchups_due(db, args):
+    """Catch-up cards (JSON list on stdin) not yet sent for their occasion."""
+    items, seen = [], set()
+    for row in json.load(sys.stdin):
+        if not row.get("username") or not row.get("text"):
+            continue
+        occasion = catchup_occasion(row)
+        if (row["username"], occasion) in seen or blocked(db, row["username"], "catchup", occasion):
+            continue
+        seen.add((row["username"], occasion))
+        items.append({
+            "username": row["username"], "name": row.get("name"), "kind": "catchup",
+            "reason": row["reason"], "occasion": occasion, "text": row["text"],
+        })
+    emit(items)
+
+
 def claim(db, args):
     kind, username, text = args.kind, args.username, (args.text or "").strip()
+    occasion = args.occasion if kind == "catchup" else None
     if kind == "invite":
         if paused := invites_paused(db):
             stop(3, f"invites are paused until {paused}: {get(db, 'invites_pause_reason')}")
@@ -275,18 +310,21 @@ def claim(db, args):
         if person and person["connected_on"]:
             stop(2, f"{username} is already a connection")
     else:
-        if used_today(db, "message") >= CONFIG["messages_per_day"]:
+        if kind == "message" and used_today(db, "message") >= CONFIG["messages_per_day"]:
             stop(3, f"daily message cap of {CONFIG['messages_per_day']} reached")
+        if kind == "catchup" and not occasion:
+            stop(2, "a catch-up needs --occasion")
         if not text:
             stop(2, "message text is empty")
         if len(text) > CONFIG["message_max_chars"]:
             stop(2, f"message is longer than {CONFIG['message_max_chars']} characters")
-    if text and re.search(r"https?://|www\.|[{}\[\]<>]", text):
+    # Catch-ups send LinkedIn's preset texts verbatim: they repeat by design, and a company can be named "<Genesys>".
+    if kind != "catchup" and text and re.search(r"https?://|www\.|[{}\[\]<>]", text):
         stop(2, "text contains a link or an unfilled placeholder")
-    if text and db.execute("SELECT 1 FROM actions WHERE text = ? AND outcome != 'failed'", (text,)).fetchone():
+    if kind != "catchup" and text and db.execute("SELECT 1 FROM actions WHERE text = ? AND outcome != 'failed'", (text,)).fetchone():
         stop(2, "this exact text was already sent to someone; personalize it")
-    if blocked(db, username, kind):
-        stop(2, f"{username} already has a recorded {kind}")
+    if blocked(db, username, kind, occasion):
+        stop(2, f"{username} already has a recorded {kind}" + (f" for {occasion}" if occasion else ""))
     if kind == "message":
         person = db.execute("SELECT thread_clear_at FROM people WHERE username = ?", (username,)).fetchone()
         checked = person and person["thread_clear_at"]
@@ -297,8 +335,8 @@ def claim(db, args):
         gap = random.uniform(*CONFIG["write_gap_seconds"]) - (now() - datetime.fromisoformat(last)).total_seconds()
         time.sleep(max(0, gap))
     db.execute(
-        "INSERT INTO actions (username, kind, reason, day, at, text, outcome) VALUES (?, ?, ?, ?, ?, ?, 'claimed')",
-        (username, kind, args.reason, today().isoformat(), now().isoformat(timespec="seconds"), text or None),
+        "INSERT INTO actions (username, kind, reason, occasion, day, at, text, outcome) VALUES (?, ?, ?, ?, ?, ?, ?, 'claimed')",
+        (username, kind, args.reason, occasion, today().isoformat(), now().isoformat(timespec="seconds"), text or None),
     )
     emit({"claimed": username, "kind": kind})
 
@@ -370,10 +408,14 @@ def main():
     command = commands.add_parser("candidates", help="queued cold-invite candidates")
     command.add_argument("limit", type=int)
     commands.add_parser("due", help="warm-up messages and viewer invites owed today")
+    commands.add_parser("catchups-due", help="catch-up cards (JSON list on stdin) not yet sent")
     command = commands.add_parser("claim", help="reserve one write before sending it")
-    command.add_argument("kind", choices=("invite", "message"))
+    command.add_argument("kind", choices=("invite", "message", "catchup"))
     command.add_argument("username")
-    command.add_argument("--reason", required=True, choices=("search", "viewer", "connection"))
+    command.add_argument("--reason", required=True, choices=(
+        "search", "viewer", "connection", "birthday", "job_change", "work_anniversary", "education",
+    ))
+    command.add_argument("--occasion", help="catch-up occasion from catchups-due")
     command.add_argument("--text")
     command = commands.add_parser("thread", help="record a conversation check before a warm-up")
     command.add_argument("username")
@@ -381,7 +423,7 @@ def main():
     command.add_argument("--reason", required=True, choices=("viewer", "connection"))
     command = commands.add_parser("result", help="settle the open claim")
     command.add_argument("username")
-    command.add_argument("kind", choices=("invite", "message"))
+    command.add_argument("kind", choices=("invite", "message", "catchup"))
     command.add_argument("outcome", choices=("sent", "unknown", "skipped", "failed"))
     command.add_argument("--status", required=True)
     command = commands.add_parser("pause-invites", help="stop invites for a number of days")
