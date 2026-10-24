@@ -58,7 +58,7 @@ Run a round on demand with `orca automations run <id>`. Inspect the ledger with 
 A second automation sends everything on the Catch up tabs (Birthdays, Job changes, Work anniversaries, Education). Each person gets LinkedIn's preset text for their card, such as "Wishing you a very happy birthday!" or "Congrats on starting your new role at Wayve!". These go to existing connections, so they skip the warm-up rule against messaging anyone you already talk to. The ledger allows one catch-up per person and occasion: one birthday or work anniversary a year, and one per new role or school. They don't count toward the daily message cap. Sends keep the ledger's 20–45 s gap, so a run of about 90 takes roughly an hour.
 
 ```bash
-orca automations create --name "LinkedIn monthly catch-ups" --trigger "FREQ=MONTHLY;BYMONTHDAY=1;BYHOUR=10;BYMINUTE=30" \
+orca automations create --name "LinkedIn monthly catch-ups" --trigger "30 10 1 * *" \
   --timezone America/Los_Angeles --provider omp --workspace "path:$PWD" --workspace-mode existing \
   --missed-run-grace-minutes 720 --precheck "pgrep -x 'Google Chrome'" \
   --prompt "Run this month's LinkedIn catch-ups. Read and follow .workflow/linkedin-catchup.md in this workspace exactly; it carries my standing authorization for the catch-up messages it describes. Work alone: no Orca workers or subagents. Finish when every catch-up is settled, or stop at a precise blocker."
