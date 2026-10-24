@@ -1,4 +1,5 @@
-// Driver for the daily LinkedIn outreach round; `.workflow/linkedin-daily-outreach.md` is the runbook.
+// Driver for the LinkedIn outreach and catch-up rounds; `.workflow/linkedin-daily-outreach.md` and
+// `.workflow/linkedin-catchup.md` are the runbooks.
 // Import it in an omp JavaScript eval cell and pass that cell's `browser` and `tool` globals.
 // Reads go through the user's Chrome (omp browser relay). Writes go through the LinkedIn MCP server,
 // and each write is claimed in the ledger (linkedin_outreach.py) first, so caps and dedupe hold.
@@ -7,6 +8,13 @@ const LEDGER = `${import.meta.dir}/linkedin_outreach.py`;
 const TAB = "linkedin-outreach";
 const CONNECTIONS_URL = "https://www.linkedin.com/mynetwork/invite-connect/connections/";
 const VIEWERS_URL = "https://www.linkedin.com/analytics/profile-views/";
+// Catch up tabs by ledger reason; "All" shows only a sample of them.
+const CATCHUP_PAGES = {
+  birthday: "birthday",
+  job_change: "job_changes",
+  work_anniversary: "work_anniversaries",
+  education: "education",
+};
 // LinkedIn's weekly invitation limit shows up as invites that stop going through.
 const FAILURES_BEFORE_PAUSE = 3;
 const BARREN_PAGES_BEFORE_STOP = 8;
@@ -89,6 +97,32 @@ const LOAD_MORE = `(() => {
   window.scrollTo(0, document.body.scrollHeight);
 })()`;
 
+// Catch up cards carry LinkedIn's preset text in full only in the button label,
+// "Message <name>: <text>"; the visible copy is cut short.
+const CATCHUP_EXTRACT = String.raw`(reason) => [...document.querySelectorAll('main [role="listitem"]')].flatMap((card) => {
+  const button = card.querySelector('button[aria-label^="Message "]');
+  const match = card.querySelector('a[href*="/in/"]')?.href.match(/linkedin\.com\/in\/([^/?#]+)/);
+  if (!button || !match) return [];
+  const lines = card.innerText.split("\n").map((line) => line.trim()).filter(Boolean);
+  const prefix = "Message " + lines[0] + ": ";
+  const label = button.getAttribute("aria-label");
+  const text = label.startsWith(prefix) ? label.slice(prefix.length).trim() : "";
+  return [{
+    username: decodeURIComponent(match[1]),
+    name: lines[0],
+    detail: lines[1] || null,
+    reason,
+    text: text && !text.endsWith("…") ? text : null,
+  }];
+})`;
+
+const CATCHUP_MORE = `(() => {
+  const cards = document.querySelectorAll('main [role="listitem"]');
+  cards[cards.length - 1]?.scrollIntoView();
+  window.scrollBy(0, 3000);
+  [...document.querySelectorAll("main button")].find((b) => /show more|load more|see more/i.test(b.innerText))?.click();
+})()`;
+
 async function openPage(browser, url) {
   // A fresh tab per page: a reused relay tab can keep evaluating in the previous document's frame.
   await browser.close({ name: TAB });
@@ -112,6 +146,21 @@ async function scan(browser, url, kind, { rounds = 1, since = null } = {}) {
     await tab.evaluate(LOAD_MORE);
     await Bun.sleep(2500);
   }
+  return rows;
+}
+
+async function scanCatchups(browser, reason) {
+  const tab = await openPage(browser, `https://www.linkedin.com/mynetwork/catch-up/${CATCHUP_PAGES[reason]}/`);
+  await Bun.sleep(3000);
+  let rows = [];
+  for (let round = 0; round < 40; round++) {
+    const loaded = rows.length;
+    rows = await tab.evaluate(`(${CATCHUP_EXTRACT})(${JSON.stringify(reason)})`);
+    if (round && rows.length === loaded) break;
+    await tab.evaluate(CATCHUP_MORE);
+    await Bun.sleep(2500);
+  }
+  for (const row of rows) if (!row.text) console.log(`skip ${row.username}: could not read the full ${reason} text`);
   return rows;
 }
 
@@ -172,9 +221,12 @@ async function invite(tool, { username, reason, text }) {
   return settled;
 }
 
-async function message(tool, { username, reason, text }) {
-  const claim = await ledger(["claim", "message", username, "--reason", reason, "--text", text ?? ""]);
-  if (claim.code) return { username, kind: "message", refused: claim.text, stop: claim.code === 3 };
+/** Warm-up or catch-up message; a catch-up carries its `occasion` from the ledger. */
+async function message(tool, { username, kind = "message", reason, occasion, text }) {
+  const claim = await ledger([
+    "claim", kind, username, "--reason", reason, ...(occasion ? ["--occasion", occasion] : []), "--text", text ?? "",
+  ]);
+  if (claim.code) return { username, kind, refused: claim.text, stop: claim.code === 3 };
   let reply;
   try {
     reply = await mcp(tool, "send_message", { linkedin_username: username, message: text, confirm_send: true });
@@ -182,9 +234,9 @@ async function message(tool, { username, reason, text }) {
     reply = { status: "tool_error", message: String(error?.message ?? error), retry_safe: false };
   }
   const outcome = reply.sent === true ? "sent" : reply.retry_safe === true ? "failed" : "unknown";
-  await ledger(["result", username, "message", outcome, "--status", String(reply.status)]);
+  await ledger(["result", username, kind, outcome, "--status", String(reply.status)]);
   // enter_to_send_enabled: LinkedIn's "Press Enter to Send" hides the Send button for every recipient.
-  return { username, kind: "message", outcome, status: reply.status, message: reply.message, stop: reply.status === "enter_to_send_enabled" };
+  return { username, kind, outcome, status: reply.status, message: reply.message, stop: reply.status === "enter_to_send_enabled" };
 }
 
 /**
@@ -209,7 +261,17 @@ export async function collectWarmups(browser) {
   return owed;
 }
 
-/** Send drafted warm-ups: items from collectWarmups plus `text`. Stops a kind at its cap. */
+/**
+ * Read every Catch up tab; return the catch-ups not yet sent, each with LinkedIn's preset text.
+ * Catch-ups go to existing connections, so they skip the no-conversation check warm-ups need.
+ */
+export async function collectCatchups(browser) {
+  const rows = [];
+  for (const reason of Object.keys(CATCHUP_PAGES)) rows.push(...await scanCatchups(browser, reason));
+  return (await ledger(["catchups-due"], rows)).json();
+}
+
+/** Send drafted warm-ups or catch-ups: items from collectWarmups (plus `text`) or collectCatchups. Stops a kind at its cap. */
 export async function deliver(tool, items) {
   const results = [];
   const stopped = new Set();

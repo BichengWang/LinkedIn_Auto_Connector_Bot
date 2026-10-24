@@ -4,7 +4,7 @@
 
 Two ways to work LinkedIn from this repo:
 
-- **Daily outreach (agent-driven).** An AI agent grows your network on a schedule. It warms up new connections and profile viewers with a short, personal self-intro, and it sends targeted connection invites. The agent reads LinkedIn in your own Chrome, writes through the [LinkedIn MCP server](https://github.com/stickerdaniel/linkedin-mcp-server), and follows a runbook that a small ledger keeps honest.
+- **Daily outreach (agent-driven).** An AI agent grows your network on a schedule. It warms up new connections and profile viewers with a short, personal self-intro, and it sends targeted connection invites. The agent reads LinkedIn in your own Chrome, writes through the [LinkedIn MCP server](https://github.com/stickerdaniel/linkedin-mcp-server), and follows a runbook that a small ledger keeps honest. A monthly round sends your [Catch up](https://www.linkedin.com/mynetwork/catch-up/all/) messages the same way.
 - **`linkedin_interaction` package.** A Python library and CLI for on-demand work, in eight modules: communication, connection, social interaction, posts, profile visits, job collecting, job matching and job applying.
 
 > ⚠️ LinkedIn's User Agreement prohibits automated access, and LinkedIn enforces an unpublished weekly invitation limit, typically around 100 per week. Going over it usually blocks invitations for a week. Use at your own risk.
@@ -12,8 +12,9 @@ Two ways to work LinkedIn from this repo:
 | Path | Role |
 | --- | --- |
 | `.workflow/linkedin-daily-outreach.md` | Runbook the agent follows: steps, standing authorization, voice, rules |
+| `.workflow/linkedin-catchup.md` | Runbook for the monthly catch-up round |
 | `.workflow/linkedin-outreach.json` | Caps, pacing, message lengths, search audiences |
-| `.scripts/linkedin_outreach.py` | Ledger CLI (stdlib only, data in `~/.linkedin-outreach/`). Handles caps, dedupe, conversation-check gate, search cursor and the Orca `precheck` |
+| `.scripts/linkedin_outreach.py` | Ledger CLI (stdlib only, data in `~/.linkedin-outreach/`). Handles caps, dedupe, conversation-check gate, search cursor, catch-up occasions and the Orca `precheck` |
 | `.scripts/linkedin_pages.js` | Driver loaded in an omp eval cell. Reads pages through the Chrome relay and writes through the LinkedIn MCP tools |
 | `linkedin_interaction/` | The package: `session.py` (browser, login, pacing, per-run caps) plus one file per module |
 | `config.example.toml` | Settings template for the package; copy it to the git-ignored `config.toml` |
@@ -51,6 +52,19 @@ The agent drafts each message from the person's headline, in the voice set in th
 4. Edit the voice section of the runbook, plus the audiences and caps in the config, to fit you.
 
 Run a round on demand with `orca automations run <id>`. Inspect the ledger with `python3 .scripts/linkedin_outreach.py status`.
+
+### Monthly catch-ups
+
+A second automation sends everything on the Catch up tabs (Birthdays, Job changes, Work anniversaries, Education). Each person gets LinkedIn's preset text for their card, such as "Wishing you a very happy birthday!" or "Congrats on starting your new role at Wayve!". These go to existing connections, so they skip the warm-up rule against messaging anyone you already talk to. The ledger allows one catch-up per person and occasion: one birthday or work anniversary a year, and one per new role or school. They don't count toward the daily message cap. Sends keep the ledger's 20–45 s gap, so a run of about 90 takes roughly an hour.
+
+```bash
+orca automations create --name "LinkedIn monthly catch-ups" --trigger "FREQ=MONTHLY;BYMONTHDAY=1;BYHOUR=10;BYMINUTE=30" \
+  --timezone America/Los_Angeles --provider omp --workspace "path:$PWD" --workspace-mode existing \
+  --missed-run-grace-minutes 720 --precheck "pgrep -x 'Google Chrome'" \
+  --prompt "Run this month's LinkedIn catch-ups. Read and follow .workflow/linkedin-catchup.md in this workspace exactly; it carries my standing authorization for the catch-up messages it describes. Work alone: no Orca workers or subagents. Finish when every catch-up is settled, or stop at a precise blocker."
+```
+
+LinkedIn keeps birthdays on Catch up for about 10 days, so a monthly run reaches only the birthdays from the last 10 days or so. Some catch-ups fail with `recipient_resolution_failed`: the LinkedIn MCP server refuses profiles that show two Message buttons, such as one with a new-role highlight. After two failures the ledger stops retrying that occasion.
 
 ## `linkedin_interaction` package
 
