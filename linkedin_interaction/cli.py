@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         log.warning("Interrupted.")
         return 130
-    except (LinkedInError, job_matching.RerankError, ValueError) as error:
+    except (LinkedInError, job_matching.RerankError, ValueError, OSError) as error:
         log.error("%s", error)
         return 1
     except WebDriverException as error:
