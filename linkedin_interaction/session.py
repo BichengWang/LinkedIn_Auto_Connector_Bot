@@ -14,6 +14,7 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from selenium import webdriver
 from selenium.common.exceptions import (
@@ -122,7 +123,7 @@ class Session:
 
     def _on_feed(self) -> bool:
         # Chrome reports a null URL mid-navigation (e.g. right after the login form submits).
-        return "/feed" in (self.driver.current_url or "")
+        return urlsplit(self.driver.current_url or "").path in ("/feed", "/feed/")
 
     def _import_cookies(self, path: Path) -> bool:
         """Load a JSON cookie export (a list of {name, value, domain, …}, as Playwright and the LinkedIn MCP
