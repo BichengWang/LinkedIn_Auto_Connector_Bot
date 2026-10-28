@@ -435,7 +435,14 @@ def _squash(text: str) -> str:
 
 
 def _primary_post(session: Session, url: str) -> WebElement:
-    """Resolve the requested activity, avoiding suggested posts and comment controls."""
+    """Resolve the requested activity, avoiding suggested posts and comment controls.
+
+    LinkedIn sometimes redirects a post URL to the feed (`/feed/foryou/`), where the first container in <main>
+    is an unrelated feed post, so anything but a post page is refused rather than acted on.
+    """
+    landed = urlparse(session.driver.current_url or "").path
+    if not landed.startswith(("/posts/", "/feed/update/")):
+        raise LinkedInError(f"Post unavailable: LinkedIn opened {landed or 'nothing'} instead of the post")
     decoded = unquote(url)
     activity = re.search(r"urn:li:activity:\d+", decoded)
     if activity is None:

@@ -1,7 +1,9 @@
+from types import SimpleNamespace
+
 import pytest
 
 from linkedin_interaction.session import LinkedInError
-from linkedin_interaction.social import _comments_from_page, awaiting_reply, find_comment
+from linkedin_interaction.social import _comments_from_page, _primary_post, awaiting_reply, find_comment
 
 ME = "kennethbcwang"
 
@@ -47,3 +49,32 @@ def test_find_comment_by_id_or_unique_author():
         find_comment(parsed, "ann")
     with pytest.raises(LinkedInError, match="No comment"):
         find_comment(parsed, "Bob")  # Bob only replied; names match top-level comments only
+
+
+class PageSession:
+    """A session that landed on `current_url` and whose page has one post container."""
+
+    def __init__(self, current_url):
+        self.driver = SimpleNamespace(current_url=current_url)
+        self.post = object()
+
+    def find_optional(self, xpath, timeout=3, root=None):
+        return self.post
+
+
+SHARE_URL = "https://www.linkedin.com/posts/yuxiong-he_ai-share-7520889848602247168-Qz_v"
+
+
+def test_primary_post_refuses_a_feed_redirect():
+    # LinkedIn sent this share URL to the feed once; the first feed post got the comment meant for the share.
+    with pytest.raises(LinkedInError, match="/feed/foryou/"):
+        _primary_post(PageSession("https://www.linkedin.com/feed/foryou/"), SHARE_URL)
+
+
+@pytest.mark.parametrize(
+    "landed",
+    [SHARE_URL + "/", "https://www.linkedin.com/feed/update/urn:li:activity:7520889849663406080/"],
+)
+def test_primary_post_accepts_post_pages(landed):
+    session = PageSession(landed)
+    assert _primary_post(session, SHARE_URL) is session.post
