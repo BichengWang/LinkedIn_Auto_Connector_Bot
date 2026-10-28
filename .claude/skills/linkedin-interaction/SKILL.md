@@ -16,6 +16,10 @@ From the repo root: `uv venv venv && uv pip install --python venv/bin/python -e 
 Sign-in is the same as the `linkedin-profile-visits` skill: the saved session in
 `~/.linkedin-interaction/chrome-profile`, else `LINKEDIN_COOKIES=~/.linkedin-mcp/cookies.json`. A login page,
 captcha or `/checkpoint/` stops the run: ask the user to finish it in the window, then rerun once.
+If those cookies are expired and the user is signed in to LinkedIn in their own Chrome, export that session
+instead of a manual login, which times out after 300 s: in an eval cell, `browser.open` the feed with
+`app: {relay: true}`, keep the `tab.cookies()` whose domain ends in `linkedin.com`, write them as a JSON list
+to `~/.linkedin-interaction/cookies.json` (mode 600) and point `LINKEDIN_COOKIES` there (2026-10-27).
 
 ## Commands
 
