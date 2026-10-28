@@ -4,36 +4,37 @@
 
 Two ways to work LinkedIn from this repo:
 
-- **Daily outreach (agent-driven).** An AI agent grows your network on a schedule. It warms up new connections and profile viewers with a short, personal self-intro, and it sends targeted connection invites. The agent reads LinkedIn in your own Chrome, writes through the [LinkedIn MCP server](https://github.com/stickerdaniel/linkedin-mcp-server), and follows a runbook that a small ledger keeps honest. A monthly round sends your [Catch up](https://www.linkedin.com/mynetwork/catch-up/all/) messages the same way.
+- **Outreach rounds (agent-driven).** An AI agent grows your network every 3 hours. It sends targeted connection invites, frontier-lab people first; warms up new connections and profile viewers with a short, personal self-intro; and likes and comments on the recent posts of your frontier-lab connections and new connections. The agent reads LinkedIn in your own Chrome, writes through the [LinkedIn MCP server](https://github.com/stickerdaniel/linkedin-mcp-server) and that Chrome tab, and follows a runbook that a small ledger keeps honest. A monthly round sends your [Catch up](https://www.linkedin.com/mynetwork/catch-up/all/) messages the same way.
 - **`linkedin_interaction` package.** A Python library and CLI for on-demand work, in eight modules: communication, connection, social interaction, posts, profile visits, job collecting, job matching and job applying.
 
-> ⚠️ LinkedIn's User Agreement prohibits automated access, and LinkedIn enforces an unpublished weekly invitation limit, typically around 100 per week. Going over it usually blocks invitations for a week. Use at your own risk.
+> ⚠️ LinkedIn's User Agreement prohibits automated access, and LinkedIn enforces an unpublished weekly invitation limit, typically around 100–200 per week. The default cap of 100 invites per 3 hours reaches it within the first round or two; after that, invites fail and the round pauses them for a day. Going over the limit usually blocks invitations for a week. Use at your own risk.
 
 | Path | Role |
 | --- | --- |
-| `.workflow/linkedin-daily-outreach.md` | Runbook the agent follows: steps, standing authorization, voice, rules |
+| `.workflow/linkedin-daily-outreach.md` | Runbook the agent follows each round: steps, standing authorization, voice, comment rules |
 | `.workflow/linkedin-catchup.md` | Runbook for the monthly catch-up round |
-| `.workflow/linkedin-outreach.json` | Caps, pacing, message lengths, search audiences |
-| `.scripts/linkedin_outreach.py` | Ledger CLI (stdlib only, data in `~/.linkedin-outreach/`). Handles caps, dedupe, conversation-check gate, search cursor, catch-up occasions and the Orca `precheck` |
-| `.scripts/linkedin_pages.js` | Driver loaded in an omp eval cell. Reads pages through the Chrome relay and writes through the LinkedIn MCP tools |
+| `.workflow/linkedin-outreach.json` | Caps, pacing, message lengths, frontier labs, search audiences |
+| `.scripts/linkedin_outreach.py` | Ledger CLI (stdlib only, data in `~/.linkedin-outreach/`). Handles caps, rounds, dedupe, conversation-check gate, search cursors, catch-up occasions, post engagement and the Orca `precheck` |
+| `.scripts/linkedin_pages.js` | Driver loaded in an omp eval cell. Reads pages through the Chrome relay, sends invites and messages through the LinkedIn MCP tools, and likes and comments in the Chrome tab |
 | `linkedin_interaction/` | The package: `session.py` (browser, login, pacing, per-run caps) plus one file per module |
 | `config.example.toml` | Settings template for the package; copy it to the git-ignored `config.toml` |
 | `AGENTS.md` / `CLAUDE.md` | Project rules every agent in this repo follows |
 | `.mcp.json`, `.agents/skills/`, `.claude/skills/`, `skills-lock.json` | Project-scoped LinkedIn MCP server, its `linkedin-mcp` skill, and the repo's own `linkedin-profile-visits`, `linkedin-interaction` and `linkedin-job-collector` skills |
 
-## Daily outreach
+## Outreach rounds
 
 ### How it works
 
-An [Orca](https://github.com/stablyai/orca) automation starts one agent round every day at 09:00 America/Los_Angeles:
+An [Orca](https://github.com/stablyai/orca) automation starts one agent round every 3 hours:
 
 1. **Warm-ups.** The agent reads your Connections page (Recently added) and Who's Viewed Your Profile.
    - **New connections** and **1st-degree viewers from the last 7 days** each get one short, personalized self-intro.
    - **2nd- and 3rd-degree viewers** get an invite with a note instead.
    - **Anyone you already have a conversation with is skipped.** Before writing, the round opens that person's composer and retires anyone with existing messages.
-2. **Cold invites.** The agent pages through the people searches in `.workflow/linkedin-outreach.json` and sends invites, up to the daily cap.
+2. **Cold invites.** The agent pages through the people searches in `.workflow/linkedin-outreach.json` and sends invites, up to `invites_per_window` (100) per `window_hours` (3). The `frontier-labs` search gets 4 of every 6 search pages, and frontier-lab candidates are invited before anyone else.
+3. **Posts.** The agent finds your connections at the `frontier_labs` companies, a few search pages per round. Frontier-lab connections first, then connections from the last 14 days, each get one like and one comment on their newest own post from the last 14 days. Each person is checked at most once a week, within daily caps of 40 likes and 20 comments.
 
-The agent drafts each message from the person's headline, in the voice set in the runbook. Everything else is deterministic. The ledger refuses any write that would break a cap, repeat a person or a text, or skip the conversation check. Three failed invites in a row pause invites until the next day, which is how LinkedIn's weekly limit shows up.
+The agent drafts each message and comment itself, in the voice set in the runbook. Everything else is deterministic. Every write waits a random 15–75 s after the previous one. The ledger refuses any write that would break a cap, repeat a person, post or text, or skip the conversation check. Three failed invites in a row pause invites until the next day, which is how LinkedIn's weekly limit shows up. A round won't start while another is running or within 2.5 hours of the last one.
 
 ### Setup
 
@@ -42,20 +43,20 @@ The agent drafts each message from the person's headline, in the voice set in th
 3. Install [Orca](https://github.com/stablyai/orca), add this repo, and create the automation:
 
    ```bash
-   orca automations create --name "LinkedIn daily outreach" --trigger daily --time 09:00 \
+   orca automations create --name "LinkedIn outreach" --trigger "17 */3 * * *" \
      --timezone America/Los_Angeles --provider omp --workspace "path:$PWD" --workspace-mode existing \
-     --missed-run-grace-minutes 240 \
+     --missed-run-grace-minutes 60 \
      --precheck "python3 $PWD/.scripts/linkedin_outreach.py precheck" \
-     --prompt "Run today's LinkedIn outreach round. Read and follow .workflow/linkedin-daily-outreach.md in this workspace exactly; it carries my standing authorization for the invites and warm-up messages it describes. Work alone: no Orca workers or subagents. Finish once python3 .scripts/linkedin_outreach.py finish has run, or stop at a precise blocker."
+     --prompt "Run a LinkedIn outreach round. Read and follow .workflow/linkedin-daily-outreach.md in this workspace exactly; it carries my standing authorization for the invites, warm-up messages, likes and comments it describes. Work alone: no Orca workers or subagents. Finish once python3 .scripts/linkedin_outreach.py finish has run, or stop at a precise blocker."
    ```
 
-4. Edit the voice section of the runbook, plus the audiences and caps in the config, to fit you.
+4. Edit the voice and comment sections of the runbook, plus the audiences, frontier labs and caps in the config, to fit you. A `frontier_labs` value is the company's LinkedIn id: the number in `urn:li:fsd_company:<id>` on its company page.
 
 Run a round on demand with `orca automations run <id>`. Inspect the ledger with `python3 .scripts/linkedin_outreach.py status`.
 
 ### Monthly catch-ups
 
-A second automation sends everything on the Catch up tabs (Birthdays, Job changes, Work anniversaries, Education). Each person gets LinkedIn's preset text for their card, such as "Wishing you a very happy birthday!" or "Congrats on starting your new role at Wayve!". These go to existing connections, so they skip the warm-up rule against messaging anyone you already talk to. The ledger allows one catch-up per person and occasion: one birthday or work anniversary a year, and one per new role or school. They don't count toward the daily message cap. Sends keep the ledger's 20–45 s gap, so a run of about 90 takes roughly an hour.
+A second automation sends everything on the Catch up tabs (Birthdays, Job changes, Work anniversaries, Education). Each person gets LinkedIn's preset text for their card, such as "Wishing you a very happy birthday!" or "Congrats on starting your new role at Wayve!". These go to existing connections, so they skip the warm-up rule against messaging anyone you already talk to. The ledger allows one catch-up per person and occasion: one birthday or work anniversary a year, and one per new role or school. They don't count toward the daily message cap. Sends keep the ledger's random 15–75 s gap, so a run of about 90 takes a little over an hour.
 
 ```bash
 orca automations create --name "LinkedIn monthly catch-ups" --trigger "30 10 1 * *" \
@@ -84,7 +85,7 @@ It drives its own Chrome window with Selenium; Firefox also works (see `[browser
 - The bot waits a random interval between actions (`[pacing]`).
 - A write runs only when you give the command explicitly.
 
-The CLI doesn't read the outreach ledger in `~/.linkedin-outreach/`, so it won't stop you from messaging someone the daily round already warmed up.
+The CLI doesn't read the outreach ledger in `~/.linkedin-outreach/`, so it won't stop you from messaging someone an outreach round already warmed up.
 
 ### Install
 
@@ -191,7 +192,7 @@ pytest
 
 ## Ad-hoc agent use
 
-Open the repo in any MCP-capable agent (omp, Claude Code, Codex, Cursor) and approve the project `linkedin` MCP server. Then ask something like "find Anthropic's leadership and send them connection requests with a short note". Outside the daily round, the `linkedin-mcp` skill makes the agent confirm the exact recipients and text before any write.
+Open the repo in any MCP-capable agent (omp, Claude Code, Codex, Cursor) and approve the project `linkedin` MCP server. Then ask something like "find Anthropic's leadership and send them connection requests with a short note". Outside the outreach rounds, the `linkedin-mcp` skill makes the agent confirm the exact recipients and text before any write.
 
 ## License
 

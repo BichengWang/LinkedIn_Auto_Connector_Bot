@@ -44,12 +44,12 @@ one browser profile.
 | Specific people (URLs or usernames) | `$V visit profile https://www.linkedin.com/in/jane-doe/ john-smith` |
 | A list from a file or another command | `... \| $V visit profile -` (whitespace-separated URLs or usernames) |
 | A people search | `$V visit search --url "<people search URL>" --pages 3 --max 30` |
-| Invite candidates the daily round queued | `python3 .scripts/linkedin_outreach.py candidates 30 \| jq -r '.[].username' \| $V visit profile -` |
+| Invite candidates the outreach round queued | `python3 .scripts/linkedin_outreach.py candidates 30 \| jq -r '.[].username' \| $V visit profile -` |
 
-- People-search URLs for the daily round's audiences follow `.workflow/linkedin-outreach.json`:
+- People-search URLs for the outreach round's audiences follow `.workflow/linkedin-outreach.json`:
   `https://www.linkedin.com/search/results/people/?keywords=<kw>&origin=FACETED_SEARCH&network=["S"]&geoUrn=["103644278"]`
   (URL-encode the brackets and quotes). Don't call `linkedin_outreach.py next-search` for this: it advances
-  the daily round's search cursor.
+  the outreach round's search cursor.
 - MCP `search_people` results can also feed `visit profile -` with their usernames.
 - Each visit stays 8–20 s and scrolls; `[pacing]` adds 2–6 s between pages.
 - `--max N` lowers the per-run cap (`limits.visits`, default 40). Keep a day under about 80 views.
