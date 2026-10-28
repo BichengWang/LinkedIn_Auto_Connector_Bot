@@ -97,6 +97,8 @@ Add later use cases here in the same shape: post, comment, facts the reply relie
 ## Rules
 
 - Act only on posts and people the user named. No bulk liking, commenting or replying across feeds or searches.
+  The one exception is the outreach round's post step (`.workflow/linkedin-daily-outreach.md`), which carries
+  its own standing authorization and goes through `.scripts/linkedin_pages.js`, not this CLI.
 - Every comment, reply, reaction and follow is public and goes out under the user's name: confirm the exact
   text and target first, unless the user supplied both verbatim.
 - Never message, invite or connect from this skill. Those go through `.workflow/linkedin-daily-outreach.md`,

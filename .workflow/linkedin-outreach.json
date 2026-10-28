@@ -1,13 +1,51 @@
 {
   "timezone": "America/Los_Angeles",
-  "invites_per_day": 100,
+  "window_hours": 3,
+  "invites_per_window": 100,
+  "round_min_gap_hours": 2.5,
   "messages_per_day": 50,
-  "write_gap_seconds": [20, 45],
+  "reactions_per_day": 40,
+  "comments_per_day": 20,
+  "write_gap_seconds": [15, 75],
   "invite_note_max_chars": 200,
   "message_max_chars": 300,
+  "comment_max_chars": 300,
   "viewer_max_age_days": 7,
   "new_connection_lookback_days": 1,
+  "core_pages_per_round": 3,
+  "engage_profiles_per_round": 25,
+  "engagements_per_round": 8,
+  "engage_person_gap_days": 7,
+  "engage_new_connection_days": 14,
+  "post_max_age_days": 14,
+  "frontier_labs": {
+    "OpenAI": "11130470",
+    "Anthropic": "74126343",
+    "Google DeepMind": "1594050",
+    "xAI": "96151950",
+    "Mistral AI": "94273421",
+    "Thinking Machines Lab": "105913171",
+    "Reflection AI": "106009488",
+    "Physical Intelligence": "100923057",
+    "Periodic Labs": "108918379"
+  },
   "searches": [
+    {
+      "name": "frontier-labs",
+      "frontier": true,
+      "weight": 4,
+      "keywords": [
+        "member of technical staff",
+        "research scientist",
+        "research engineer",
+        "software engineer",
+        "machine learning",
+        "infrastructure",
+        "product",
+        "lead"
+      ],
+      "network": ["S", "O"]
+    },
     {
       "name": "ai-ml-us",
       "keywords": [
