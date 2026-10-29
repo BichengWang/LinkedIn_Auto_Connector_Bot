@@ -46,7 +46,7 @@ The agent drafts each message and comment itself, in the voice set in the runboo
    orca automations create --name "LinkedIn outreach" --trigger "17 */3 * * *" \
      --timezone America/Los_Angeles --provider omp --workspace "path:$PWD" --workspace-mode existing \
      --missed-run-grace-minutes 60 \
-     --precheck "python3 $PWD/.scripts/linkedin_outreach.py precheck" \
+     --precheck "git -C $PWD pull -q --ff-only || true; python3 $PWD/.scripts/linkedin_outreach.py precheck" \
      --prompt "Run a LinkedIn outreach round. Read and follow .workflow/linkedin-daily-outreach.md in this workspace exactly; it carries my standing authorization for the invites, warm-up messages, likes and comments it describes. Work alone: no Orca workers or subagents. Finish once python3 .scripts/linkedin_outreach.py finish has run, or stop at a precise blocker."
    ```
 
