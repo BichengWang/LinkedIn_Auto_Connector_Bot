@@ -20,7 +20,7 @@ This satisfies the confirmation rules of the `linkedin-mcp` and `linkedin-intera
 ## Who
 
 - **Frontier labs**: the companies in `frontier_labs` in the config (OpenAI, Anthropic, Google DeepMind, xAI, Mistral AI, Thinking Machines Lab, Reflection AI, Physical Intelligence, Periodic Labs). The `frontier-labs` search finds their people for invites. My connections who work there are found a few pages per round (`core_pages_per_round`).
-- **Post engagement**: frontier-lab connections first, then connections made in the last 14 days. Each person's newest own post from the last 14 days gets one like and one comment. Reposts and posts I already liked are skipped. Each person is checked at most once a week.
+- **Post engagement**: frontier-lab connections first, then connections made in the last 14 days. Each person's newest own post from the last 14 days gets one like and one comment. Remaining slots (8 posts per round) are filled from LinkedIn's posts search for the past week's posts by frontier-lab people, at any connection degree. That search also returns people with no tie to a lab, so its authors count only when a frontier-lab people search already found them or their headline names a lab (`frontier_headline_pattern`). Reposts and posts I already liked are skipped. Each person is checked at most once a week.
 
 ## Warm-ups
 

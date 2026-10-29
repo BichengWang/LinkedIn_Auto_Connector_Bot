@@ -144,8 +144,10 @@ const POSTS_EXTRACT = String.raw`() => {
     scope.setAttribute("data-omp-post", String(index));
     const lines = card.innerText.split("\n").map((line) => line.trim()).filter(Boolean);
     const at = lines.findIndex((line, i) => i > 1 && i < 10 && date.test(line));
+    const degreeAt = lines.findIndex((line, i) => i < at && /•\s*(1st|2nd|3rd)/.test(line));
     const body = [];
     for (const line of at > 0 ? lines.slice(at + 1) : []) {
+      if (!body.length && /^(Follow|Following|Connect)$/.test(line)) continue; // shown for non-connections
       if (/^(\d[\d,]*|… more|Like|Comment|Repost|Send)$/.test(line)) break;
       body.push(line);
     }
@@ -153,6 +155,8 @@ const POSTS_EXTRACT = String.raw`() => {
       index,
       actor: decodeURIComponent(card.querySelector('a[href*="/in/"]')?.href.match(/\/in\/([^/?#]+)/)?.[1] || ""),
       byline: lines[1] || "",
+      degree: degreeAt >= 0 ? lines[degreeAt].match(/(1st|2nd|3rd)/)[1] : null,
+      headline: degreeAt >= 0 && degreeAt + 1 < at ? lines[degreeAt + 1] : null,
       posted: at > 0 ? lines[at].match(date)[1] : null,
       reaction: card.querySelector('button[aria-label^="Reaction button state"]').getAttribute("aria-label").split(":")[1].trim(),
       text: body.join("\n"),
@@ -525,10 +529,42 @@ export async function runInvites(browser, tool, { batch = 10 } = {}) {
   return { done: false, results };
 }
 
+/** Up to `wanted` fresh posts from the frontier-lab posts search, one per author due for engagement. */
+async function frontierPosts(browser, wanted, maxAgeDays) {
+  const tab = await openPage(browser, (await ledger(["post-search"])).json().url);
+  try {
+    await tab.waitForSelector('main button[aria-label^="Reaction button state"]', { timeout: 15000 });
+  } catch {
+    return [];
+  }
+  for (let round = 0; round < 3; round++) {
+    await tab.evaluate("window.scrollBy(0, 4000)");
+    await Bun.sleep(2500);
+  }
+  const read = async () => (await tab.evaluate(`(${POSTS_EXTRACT})()`))
+    .filter((c) => c.actor && c.degree && !/ this$/.test(c.byline) && c.text && c.reaction === "no reaction")
+    .filter((c) => ageDays(c.posted) <= maxAgeDays)
+    .map((c) => ({ ...c, key: postKey(c.actor, c.text) }));
+  const cards = await read();
+  const authors = cards.map((c) => ({ username: c.actor, name: c.byline.split("•")[0].trim(), headline: c.headline, degree: c.degree }));
+  const due = (await ledger(["posts-due"], authors)).json().slice(0, wanted);
+  for (const person of due) await tab.evaluate(`(${EXPAND_POST})(${cards.find((c) => c.actor === person.username).index})`);
+  await Bun.sleep(1000);
+  const expanded = await read();
+  const owed = [];
+  for (const person of due) {
+    const { key, posted, text } = cards.find((c) => c.actor === person.username);
+    await ledger(["posts-checked", person.username]);
+    owed.push({ ...person, post: { key, posted, text: (expanded.find((c) => c.key === key)?.text ?? text).slice(0, 2500) } });
+  }
+  return owed;
+}
+
 /**
  * Refresh my frontier-lab connections from a few pages of their people search, then read the recent
- * activity of new connections and frontier-lab connections due for engagement. Returns their newest own
- * post that I haven't reacted to, one per person, for the agent to write a comment on.
+ * activity of frontier-lab and new connections due for engagement, and top up from the posts search
+ * of frontier-lab people. Returns one post per person that I haven't reacted to, for the agent to
+ * write a comment on.
  */
 export async function collectPosts(browser) {
   const status = (await ledger(["status"])).json();
@@ -545,6 +581,9 @@ export async function collectPosts(browser) {
     await ledger(["posts-checked", person.username]);
     if (post) owed.push({ ...person, post });
     else console.log(`skip ${person.username}: no unreacted own post from the last ${status.post_max_age_days} days`);
+  }
+  if (owed.length < status.engagements_per_round) {
+    owed.push(...await frontierPosts(browser, status.engagements_per_round - owed.length, status.post_max_age_days));
   }
   return owed;
 }
