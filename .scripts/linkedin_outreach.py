@@ -332,6 +332,45 @@ def next_core_page(db, args):
     emit({"page": page, "url": people_search_url(None, page, {"network": ["F"], "currentCompany": FRONTIER})})
 
 
+def post_search(db, args):
+    """Posts search: the past week's posts by people LinkedIn lists at a frontier lab, newest first."""
+    query = {
+        "origin": "FACETED_SEARCH",
+        "authorCompany": json.dumps(FRONTIER, separators=(",", ":")),
+        "datePosted": json.dumps("past-week"),
+        "sortBy": json.dumps("date_posted"),
+    }
+    emit({"url": "https://www.linkedin.com/search/results/content/?" + urlencode(query)})
+
+
+def posts_due(db, args):
+    """Post-search authors (JSON list on stdin) due for engagement, each recorded as a frontier-lab person.
+
+    LinkedIn's author-company filter also returns people with no tie to a lab, so an author counts only
+    when a frontier-lab people search already found them or their headline names a lab.
+    """
+    if not left_today(db, "react") and not left_today(db, "comment"):
+        emit([])
+        return
+    pattern = re.compile(CONFIG["frontier_headline_pattern"], re.IGNORECASE)
+    horizon = now() - timedelta(days=CONFIG["engage_person_gap_days"])
+    items, seen = [], set()
+    for row in json.load(sys.stdin):
+        username = row.get("username")
+        if not username or username in seen:
+            continue
+        person = db.execute("SELECT core, posts_checked_at FROM people WHERE username = ?", (username,)).fetchone()
+        if not ((person and person["core"]) or pattern.search(row.get("headline") or "")):
+            continue
+        if person and person["posts_checked_at"] and datetime.fromisoformat(person["posts_checked_at"]) > horizon:
+            continue
+        seen.add(username)
+        upsert(db, row)
+        db.execute("UPDATE people SET core = 1 WHERE username = ?", (username,))
+        items.append({"username": username, "name": row.get("name"), "headline": row.get("headline"), "reason": "core"})
+    emit(items)
+
+
 def queued(db, limit):
     """Cold-invite candidates, frontier-lab people first."""
     rows = db.execute(
@@ -551,6 +590,8 @@ def main():
     command.add_argument("limit", type=int)
     commands.add_parser("due", help="warm-up messages and viewer invites owed today")
     commands.add_parser("engage-due", help="people whose recent posts to read this round")
+    commands.add_parser("post-search", help="URL of the past week's posts by frontier-lab people")
+    commands.add_parser("posts-due", help="post-search authors (JSON list on stdin) due for engagement")
     command = commands.add_parser("posts-checked", help="record a read of someone's recent activity")
     command.add_argument("username")
     commands.add_parser("catchups-due", help="catch-up cards (JSON list on stdin) not yet sent")

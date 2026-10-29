@@ -29,6 +29,7 @@
     "Physical Intelligence": "100923057",
     "Periodic Labs": "108918379"
   },
+  "frontier_headline_pattern": "OpenAI|Anthropic|DeepMind|\\bGDM\\b|\\bxAI\\b|SpaceXSI|SpaceX Super ?Intelligence|Mistral|Thinking Machines|Reflection AI|Physical Intelligence|Periodic Labs",
   "searches": [
     {
       "name": "frontier-labs",
