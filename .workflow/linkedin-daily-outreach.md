@@ -15,7 +15,7 @@ This satisfies the confirmation rules of the `linkedin-mcp` and `linkedin-intera
 2. **Warm-ups.** Run `const due = await P.collectWarmups(browser)`. Write one text per item (see Voice). Then run `await P.deliver(tool, items)`, with up to 10 items per cell. Each item is a `due` entry plus `text`.
 3. **Cold invites.** Repeat `await P.runInvites(browser, tool)` until it returns `done: true`.
 4. **Posts.** Run `const posts = await P.collectPosts(browser)`. For each item, read `post.text` and write a comment (see Comments). Then run `await P.engage(browser, items)`, with up to 4 items per cell. Each item is a `posts` entry plus `comment`. Leave `comment` out to only like the post. Leave the item out entirely to skip the post.
-5. Run `await P.closeTab(browser)`, then `L finish`. Reply with the counts, failures, `done` reasons and blockers.
+5. Run `await P.closeTab(browser)`, then `L finish`. Reply with the counts, failures, `done` reasons and blockers. Run `L finish` even when a step failed or you stop at a blocker, so the next round isn't held back by this one's lock.
 
 ## Who
 
@@ -69,4 +69,5 @@ Example, post on full-duplex voice models losing the turn boundary: "The turn bo
 - Respect every stop: a cap was reached, invites are paused, or search pages ran dry. Three failed invites in a row pause invites until tomorrow; that is how LinkedIn's weekly limit shows up. Report stops; never work around them.
 - A Chrome sign-in page, captcha or verification step: stop and ask me to finish it.
 - `enter_to_send_enabled`: stop messaging and ask me to switch LinkedIn to "Click Send to send".
+- The browser relay sometimes drops for a minute ("extension disconnected"). Wait 60 s and rerun the cell once. The ledger keeps reruns safe: written people are refused, and an `unknown` is never retried. If it fails again, go to step 5 and report it.
 - The ledger in `~/.linkedin-outreach/` holds personal data. Never copy it into the repo.
