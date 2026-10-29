@@ -1,12 +1,15 @@
 """Job collecting: save the jobs in LinkedIn's job tracker (Saved, Applied, …) as local Markdown files.
 
 Each job becomes `<company>-<title>-<job id>.md` holding the posting's full description, for interview prep.
-`<stage>-jobs.md` indexes one tracker stage in LinkedIn's order. Reruns fetch only jobs without a file yet,
-so notes kept beside the files survive; `refresh` rewrites the job files from LinkedIn.
+`<stage>-jobs.md` indexes one tracker stage in LinkedIn's order, and `<stage>-jobs.csv` lists the same jobs with
+their requirements, salary ranges and full descriptions for a spreadsheet. Reruns fetch only jobs without a file
+yet, so notes kept beside the files survive; `refresh` rewrites the job files from LinkedIn.
 """
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import logging
 import re
@@ -16,9 +19,16 @@ from enum import StrEnum
 from pathlib import Path
 
 from .job_matching import Job, fetch_description
+from .job_requirements import extract_requirements
 from .session import BASE_URL, ElementMissing, LinkedInError, Session
 
 log = logging.getLogger(__name__)
+
+CSV_COLUMNS = (
+    "rank", "job_id", "company", "title", "location", "salary_ranges", "min_years", "max_years", "degrees",
+    "required_qualifications", "preferred_qualifications", "url", "collected", "file", "not_collected",
+    "description",
+)
 
 STAGES = ("saved", "applied", "interview", "archived")
 TRACKER_JOB_LINK = "//main//a[contains(@href, '/jobs/view/')]"
@@ -127,6 +137,11 @@ def read_job_meta(path: Path) -> dict[str, str]:
     return {}
 
 
+def read_job_description(path: Path) -> str:
+    """The "About the job" text of a file written by `render_job`."""
+    return path.read_text(encoding="utf-8").partition("\n## About the job\n\n")[2].strip()
+
+
 def _cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
@@ -149,9 +164,42 @@ def render_index(stage: str, results: list[CollectResult], updated: date) -> str
     )
 
 
+def render_csv(results: list[CollectResult]) -> str:
+    """One row per job in tracker order. List cells put one item per line; a job never collected keeps only
+    its id, link and the reason."""
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=CSV_COLUMNS, lineterminator="\n")
+    writer.writeheader()
+    for rank, result in enumerate(results, 1):
+        row = {"rank": rank, "job_id": result.job_id, "url": job_url(result.job_id)}
+        if result.path is None:
+            writer.writerow(row | {"not_collected": result.detail})
+            continue
+        meta = read_job_meta(result.path)
+        description = read_job_description(result.path)
+        requirements = extract_requirements(description)
+        writer.writerow(row | {
+            "company": meta.get("company", ""),
+            "title": meta.get("title", ""),
+            "location": meta.get("location", ""),
+            "salary_ranges": "\n".join(requirements.salary_ranges),
+            "min_years": requirements.min_years,
+            "max_years": requirements.max_years,
+            "degrees": ", ".join(requirements.degrees),
+            "required_qualifications": "\n".join(requirements.required),
+            "preferred_qualifications": "\n".join(requirements.preferred),
+            "url": meta.get("url") or row["url"],
+            "collected": meta.get("collected", ""),
+            "file": result.path.name,
+            "description": description,
+        })
+    return out.getvalue()
+
+
 def collect_jobs(session: Session, out_dir: Path, stage: str = "saved", refresh: bool = False,
                  limit: int | None = None, today: date | None = None) -> list[CollectResult]:
-    """Write one file per job in the tracker stage (the first `limit` only, when given) plus the stage index."""
+    """Write one file per job in the tracker stage (the first `limit` only, when given) plus the stage index
+    and CSV."""
     if stage not in STAGES:
         raise ValueError(f"unknown job tracker stage {stage!r}; choose from {', '.join(STAGES)}")
     today = today or date.today()
@@ -180,4 +228,6 @@ def collect_jobs(session: Session, out_dir: Path, stage: str = "saved", refresh:
         results.append(CollectResult(job_id, status, path))
         session.pause()
     (out_dir / f"{stage}-jobs.md").write_text(render_index(stage, results, today), encoding="utf-8")
+    # The BOM lets Excel and Numbers read the CSV as UTF-8.
+    (out_dir / f"{stage}-jobs.csv").write_text(render_csv(results), encoding="utf-8-sig")
     return results

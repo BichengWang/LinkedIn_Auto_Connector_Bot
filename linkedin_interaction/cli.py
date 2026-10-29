@@ -380,7 +380,7 @@ def _jobs_collect(args, settings):
             print(f"{result.status.value:>9}  {where}" + (f"  ({result.detail})" if result.detail else ""))
         counts = {status: sum(r.status is status for r in results) for status in job_collecting.CollectStatus}
         print(", ".join(f"{count} {status.value}" for status, count in counts.items())
-              + f". Index: {out_dir / f'{args.stage}-jobs.md'}")
+              + f". Index: {out_dir / f'{args.stage}-jobs.md'}, CSV: {out_dir / f'{args.stage}-jobs.csv'}")
 
     return settings, run
 
@@ -480,7 +480,7 @@ def _build_parser() -> argparse.ArgumentParser:
     cmd.set_defaults(command=_visit_search)
 
     jobs = actions("jobs", "collect tracked jobs, job matching and Easy Apply")
-    cmd = jobs.add_parser("collect", help="save your job-tracker jobs (default: Saved) as Markdown files")
+    cmd = jobs.add_parser("collect", help="save your job-tracker jobs (default: Saved) as Markdown files and a CSV")
     cmd.add_argument("--stage", choices=job_collecting.STAGES, default="saved", help="job tracker tab (default: saved)")
     cmd.add_argument("--out", type=Path, default=Path("~/linkedin-jobs"), help="folder (default: ~/linkedin-jobs)")
     cmd.add_argument("--refresh", action="store_true", help="re-fetch jobs that already have a file")

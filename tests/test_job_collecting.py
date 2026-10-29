@@ -1,3 +1,4 @@
+import csv
 from datetime import date
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from linkedin_interaction.job_collecting import (
     find_job_file,
     job_file_name,
     read_job_meta,
+    render_csv,
     render_index,
     render_job,
 )
@@ -57,3 +59,26 @@ def test_index_links_collected_files_and_failed_jobs_to_linkedin(tmp_path: Path)
     ], date(2026, 10, 24))
     assert f"| 1 | Acme | [Engineer \\| Platform](<{path.name}>) | San Francisco, CA |" in index
     assert "| 2 | | [job 123](https://www.linkedin.com/jobs/view/123/) | not collected: no readable description |" in index
+
+
+def test_csv_keeps_tracker_order_multiline_cells_and_jobs_that_failed(tmp_path: Path) -> None:
+    job = _job(title='Engineer, "Data"')
+    job = Job(job.id, job.url, job.title, job.company, job.location, False,
+              "About the role\n\nBuild.\n\nRequirements\n\n- 10+ years of Python\n- Bachelor's degree\n\n"
+              "Pay Range\n\n$292,000—$365,000 USD\n")
+    path = tmp_path / job_file_name(job)
+    path.write_text(render_job(job, date(2026, 10, 24)), encoding="utf-8")
+    rows = list(csv.DictReader(render_csv([
+        CollectResult("123", CollectStatus.FAILED, None, "no readable description"),
+        CollectResult(job.id, CollectStatus.KEPT, path),
+    ]).splitlines(keepends=True)))
+    assert [row["rank"] for row in rows] == ["1", "2"]
+    assert rows[0]["job_id"] == "123"
+    assert rows[0]["url"] == "https://www.linkedin.com/jobs/view/123/"
+    assert rows[0]["not_collected"] == "no readable description"
+    assert rows[1]["title"] == 'Engineer, "Data"'
+    assert rows[1]["required_qualifications"] == "10+ years of Python\nBachelor's degree"
+    assert (rows[1]["min_years"], rows[1]["degrees"]) == ("10", "BS")
+    assert rows[1]["salary_ranges"] == "$292,000—$365,000 USD"
+    assert rows[1]["description"] == job.description.strip()
+    assert rows[1]["file"] == path.name
