@@ -76,7 +76,7 @@ LinkedIn keeps birthdays on Catch up for about 10 days, so a monthly run reaches
 | `social` | follow people and companies, react to posts, comment, list a post's comments and reply to them | `social follow / react / comment / comments / reply` |
 | `posts` | publish text posts, read the feed | `post create / feed` |
 | `visits` | view profiles as you, so you show up in their "Who viewed your profile"; skips anyone viewed in the last `revisit_days` | `visit profile / search` |
-| `job_collecting` | save the jobs in your job tracker (Saved, Applied, Interview, Archived) as one Markdown file each, with the full description, for interview prep | `jobs collect` |
+| `job_collecting` | save the jobs in your job tracker (Saved, Applied, Interview, Archived) as one Markdown file each, with the full description, plus a CSV of their requirements, for interview prep | `jobs collect` |
 | `job_matching` | search jobs, keyword-filter them, rerank the best with Claude against your resume | `jobs match` |
 | `job_applying` | Easy Apply from your answers map, stopping at review for your y/N | `jobs apply` |
 
@@ -145,7 +145,7 @@ Global flags: `--config PATH`, `--headless`, `-v`. Text arguments accept `-` to 
 
 **Profile visits.** A view counts when your signed-in browser renders the profile, so visits run in the real browser: a bare HTTP call to LinkedIn's internal API doesn't reliably register one. Each visit stays 8–20 s on the page and scrolls (`[visits]`). The history in `~/.linkedin-interaction/visits.sqlite3` skips anyone viewed in the last `revisit_days` (30); pass `--again` to override. Viewers show up by name only when LinkedIn's Settings → Visibility → Profile viewing options is set to your name and headline.
 
-**Job collecting.** `jobs collect` pages through [your job tracker](https://www.linkedin.com/jobs-tracker/?stage=saved) and writes `<company>-<title>-<job id>.md` for each job: front matter (`job_id`, `title`, `company`, `location`, `url`, `collected`), then the full "About the job" text with its bullets. `<stage>-jobs.md` indexes the stage in tracker order. A job that already has a file is kept as is unless you pass `--refresh`, so reruns are fast and notes in other files stay untouched.
+**Job collecting.** `jobs collect` pages through [your job tracker](https://www.linkedin.com/jobs-tracker/?stage=saved) and writes `<company>-<title>-<job id>.md` for each job: front matter (`job_id`, `title`, `company`, `location`, `url`, `collected`), then the full "About the job" text with its bullets. `<stage>-jobs.md` indexes the stage in tracker order. `<stage>-jobs.csv` has one row per job with its salary ranges, years of experience, degrees, required and preferred qualifications, and the full description; `job_requirements` reads these from the posting's section headings, so the full description stays the reference. A job that already has a file is kept as is unless you pass `--refresh`, so reruns are fast and notes in other files stay untouched.
 
 ### Job matching and applying
 

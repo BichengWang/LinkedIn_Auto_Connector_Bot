@@ -1,6 +1,6 @@
 ---
 name: linkedin-job-collector
-description: Collect the jobs in the user's LinkedIn job tracker (Saved by default; also Applied, Interview, Archived) into a local folder, one Markdown file per job with its full description and requirements, for interview prep. Use for requests to collect, download, export or sync saved LinkedIn jobs, or to prepare for an interview from them.
+description: Collect the jobs in the user's LinkedIn job tracker (Saved by default; also Applied, Interview, Archived) into a local folder, one Markdown file per job with its full description and requirements plus a CSV of all of them, for interview prep. Use for requests to collect, download, export or sync saved LinkedIn jobs, to get their requirements as a spreadsheet or CSV, or to prepare for an interview from them.
 ---
 
 # LinkedIn job collector
@@ -51,6 +51,11 @@ Output, all in the folder:
   `collected`), then `## About the job` with the full description.
 - `<stage>-jobs.md`: a table of the jobs in tracker order, linking each file. A job that failed to load
   links to LinkedIn instead, with the reason.
+- `<stage>-jobs.csv`: the same jobs, one row each, for a spreadsheet: company, title, location, salary
+  ranges, `min_years`/`max_years` and `degrees` from the requirements, `required_qualifications` and
+  `preferred_qualifications` (one per line), link, file and the full `description`. The requirement columns
+  come from the posting's section headings, so check `description` when one is empty or looks off. A job
+  that failed to load has only its id, link and `not_collected` reason.
 - Files of jobs since removed from the tracker stay where they are.
 
 The command prints one line per job (`new`, `refreshed`, `kept` or `failed`) and a count summary. Report the
