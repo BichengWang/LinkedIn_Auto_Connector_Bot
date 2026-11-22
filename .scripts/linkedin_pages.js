@@ -48,11 +48,7 @@ async function ledger(args, input) {
 }
 
 async function mcp(tool, name, args) {
-  const response = await tool.write({
-    path: `xd://mcp__linkedin_${name}`,
-    content: JSON.stringify(args),
-    i: `Running LinkedIn ${name}`,
-  });
+  const response = await tool[`mcp__linkedin_${name}`](args);
   const text = typeof response === "string" ? response : response.text;
   try {
     return JSON.parse(text);
